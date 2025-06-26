@@ -5,6 +5,12 @@
     "rootDir": "src",
     "outDir": "dist",
     "strict": true,
-    "esModuleInterop": true                             /* Skip type checking all .d.ts files. */
-  }
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

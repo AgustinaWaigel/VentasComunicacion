@@ -22,3 +22,5 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: VITE_API_URL
+        value: https://mi-app-ventas-backend.onrender.com

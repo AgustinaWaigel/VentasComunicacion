@@ -6,7 +6,7 @@
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "postbuild": "cp -r data dist/ || xcopy data dist\\data /E /I",
+    "postbuild": "xcopy data dist\\data /E /I /Q /Y || cp -r data dist/",
     "deploy": "npm run build && npm start"
   },
   "keywords": [],
