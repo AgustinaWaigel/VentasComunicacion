@@ -77,8 +77,8 @@ Este proyecto está configurado para deployarse fácilmente en Render usando el 
 3. Crear nuevo "Blueprint"
 4. Conectar repositorio
 5. ¡Listo! URLs automáticas:
-   - Frontend: `https://mi-app-ventas-frontend.onrender.com`
-   - Backend: `https://mi-app-ventas-backend.onrender.com`
+   - Frontend: `https://ventasiam-frontend.onrender.com`
+   - Backend: `https://ventasiam-backend.onrender.com`
 
 Ver `RENDER_DEPLOY.md` para instrucciones detalladas.
 

@@ -16,7 +16,7 @@ app.get("/", (req, res) => {
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
     ? [
-        'https://mi-app-ventas-frontend.onrender.com',
+        'https://ventasiam.onrender.com',
         'https://tu-frontend-url.vercel.app',
         'https://tu-frontend-url.netlify.app',
         // Agrega aquí las URLs donde se deployará tu frontend
