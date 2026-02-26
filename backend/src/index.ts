@@ -16,19 +16,23 @@ app.get("/", (req, res) => {
 
 // Configuración CORS para desarrollo y producción
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        'https://ventasiam.onrender.com',
-        'https://tu-frontend-url.vercel.app',
-        'https://tu-frontend-url.netlify.app',
-        // Agrega aquí las URLs donde se deployará tu frontend
-      ]
-    : [
-        'http://localhost:3000', 
-        'http://localhost:5173',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:5173'
-      ],
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    const allowed = [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+    ];
+    const allowedPatterns = [
+      /\.vercel\.app$/,
+      /\.onrender\.com$/,
+      /\.netlify\.app$/,
+    ];
+    if (!origin || allowed.includes(origin) || allowedPatterns.some(p => p.test(origin))) {
+      callback(null, true);
+    } else {
+      callback(new Error('No permitido por CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
