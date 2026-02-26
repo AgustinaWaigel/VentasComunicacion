@@ -1,0 +1,27 @@
+services:
+  # Backend Service
+  - type: web
+    name: ventasiam-api
+    env: node
+    plan: free
+    buildCommand: cd backend && npm ci && npm run build
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false   # ← Setear manualmente en Render dashboard con la URL de Supabase (puerto 6543)
+
+  # Frontend Service
+  - type: web
+    name: ventasiam
+    env: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_API_URL
+        value: https://ventasiam-api.onrender.com
