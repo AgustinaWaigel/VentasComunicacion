@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import prisma from '../utils/prismaClient';
+import { Prisma } from '../../generated/prisma';
 
 const router = Router();
 const UPLOADS_FOLDER = path.join(__dirname, '../../uploads');
@@ -111,7 +112,20 @@ router.delete('/:id', async (req: Request, res: Response) => {
     await prisma.producto.delete({ where: { id } });
     res.json({ ok: true });
   } catch (error) {
-    res.status(404).json({ error: 'Producto no encontrado' });
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2025') {
+        res.status(404).json({ error: 'Producto no encontrado' });
+        return;
+      }
+
+      if (error.code === 'P2003') {
+        res.status(409).json({ error: 'No se puede eliminar: el producto tiene ventas asociadas' });
+        return;
+      }
+    }
+
+    console.error(error);
+    res.status(500).json({ error: 'Error al eliminar producto' });
   }
 });
 

@@ -63,12 +63,19 @@ export default function EditarProductos() {
     fetch(`${import.meta.env.VITE_API_URL}/api/productos/${id}`, {
       method: "DELETE",
     })
-      .then((res) => {
+      .then(async (res) => {
         if (res.ok) {
           setProductos((prev) => prev.filter((p) => p.id !== id));
           setMensaje("✅ Producto eliminado");
         } else {
-          setMensaje("❌ Error al eliminar");
+          let errorMsg = "❌ Error al eliminar";
+          try {
+            const data = await res.json();
+            if (data?.error) errorMsg = `❌ ${data.error}`;
+          } catch {
+            // Mantener mensaje genérico si la respuesta no es JSON
+          }
+          setMensaje(errorMsg);
         }
       })
       .catch(() => setMensaje("❌ Error de red"));
