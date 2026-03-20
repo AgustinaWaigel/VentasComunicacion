@@ -1,10 +1,16 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
+import fs from 'fs';
 import multer from 'multer';
 import prisma from '../utils/prismaClient';
 
 const router = Router();
 const UPLOADS_FOLDER = path.join(__dirname, '../../uploads');
+
+// Asegura la carpeta en entornos donde no se versionan directorios vacios (ej. Render)
+if (!fs.existsSync(UPLOADS_FOLDER)) {
+  fs.mkdirSync(UPLOADS_FOLDER, { recursive: true });
+}
 
 // Configuración de almacenamiento de imágenes con multer
 const storage = multer.diskStorage({
