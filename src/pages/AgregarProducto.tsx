@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE_URL } from "../config/api";
 
 export default function AgregarProducto() {
   const [nombre, setNombre] = useState("");
@@ -71,7 +72,7 @@ export default function AgregarProducto() {
     }
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/productos`, {
+      const res = await fetch(`${API_BASE_URL}/api/productos`, {
         method: "POST",
         body: formData,
       });

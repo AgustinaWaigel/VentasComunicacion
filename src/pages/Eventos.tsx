@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Evento } from "../types";
+import { API_BASE_URL } from "../config/api";
 
 export default function Eventos() {
     const [eventos, setEventos] = useState<Evento[]>([]);
@@ -22,7 +23,7 @@ export default function Eventos() {
     const cargarEventos = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/eventos`);
+            const response = await fetch(`${API_BASE_URL}/api/eventos`);
             if (!response.ok) throw new Error('Error al cargar eventos');
             const data = await response.json();
             setEventos(data);
@@ -42,7 +43,7 @@ export default function Eventos() {
         }
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/eventos`, {
+            const response = await fetch(`${API_BASE_URL}/api/eventos`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nombre, fecha, descripcion })
@@ -67,7 +68,7 @@ export default function Eventos() {
         }
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/eventos/${eventoSeleccionado.id}`, {
+            const response = await fetch(`${API_BASE_URL}/api/eventos/${eventoSeleccionado.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nombre, fecha, descripcion })
@@ -86,7 +87,7 @@ export default function Eventos() {
 
     const toggleEvento = async (evento: Evento) => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/eventos/${evento.id}`, {
+            const response = await fetch(`${API_BASE_URL}/api/eventos/${evento.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...evento, activo: !evento.activo })
@@ -104,7 +105,7 @@ export default function Eventos() {
 
     const cargarEstadisticas = async (eventoId: number) => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/eventos/${eventoId}/estadisticas`);
+            const response = await fetch(`${API_BASE_URL}/api/eventos/${eventoId}/estadisticas`);
             if (!response.ok) throw new Error('Error al cargar estadísticas');
             const data = await response.json();
             setEstadisticas(data);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "../config/api";
 
 interface Producto {
   id: number;
@@ -17,7 +18,7 @@ export default function EditarProductos() {
   const [mensaje, setMensaje] = useState("");
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/api/productos`)
+    fetch(`${API_BASE_URL}/api/productos`)
       .then((res) => res.json())
       .then(setProductos)
       .catch(() => setMensaje("❌ Error al cargar productos"));
@@ -39,7 +40,7 @@ export default function EditarProductos() {
       formData.append("imagen", imagenNueva);
     }
 
-    fetch(`${import.meta.env.VITE_API_URL}/api/productos/${producto.id}`, {
+    fetch(`${API_BASE_URL}/api/productos/${producto.id}`, {
       method: "PUT",
       body: formData,
     })
@@ -60,7 +61,7 @@ export default function EditarProductos() {
   const eliminarProducto = (id: number) => {
     if (!confirm("¿Estás seguro de eliminar este producto?")) return;
 
-    fetch(`${import.meta.env.VITE_API_URL}/api/productos/${id}`, {
+    fetch(`${API_BASE_URL}/api/productos/${id}`, {
       method: "DELETE",
     })
       .then(async (res) => {
@@ -129,7 +130,7 @@ export default function EditarProductos() {
                         <div className="w-32 h-32 mx-auto lg:mx-0">
                           {p.imagen ? (
                             <img
-                              src={`${import.meta.env.VITE_API_URL}/uploads/${p.imagen}`}
+                              src={`${API_BASE_URL}/uploads/${p.imagen}`}
                               alt={p.nombre}
                               className="w-full h-full object-cover rounded-2xl border-2 border-gray-200 shadow-md"
                             />

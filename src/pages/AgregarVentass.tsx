@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "../config/api";
 import * as XLSX from "xlsx";
 import ModalResumenVenta from "../components/ModalResumenVenta";
 
@@ -45,7 +46,7 @@ export default function AgregarVentas() {
 
     useEffect(() => {
         // Cargar productos
-        fetch(`${import.meta.env.VITE_API_URL}/api/productos`)
+        fetch(`${API_BASE_URL}/api/productos`)
             .then(async (res) => {
                 if (!res.ok) {
                     const text = await res.text();
@@ -61,7 +62,7 @@ export default function AgregarVentas() {
             });
 
         // Cargar eventos activos
-        fetch(`${import.meta.env.VITE_API_URL}/api/eventos`)
+        fetch(`${API_BASE_URL}/api/eventos`)
             .then(async (res) => {
                 if (!res.ok) {
                     const text = await res.text();
@@ -286,7 +287,7 @@ export default function AgregarVentas() {
                                                     >
                                                         {p.imagen ? (
                                                             <img
-                                                                src={`${import.meta.env.VITE_API_URL}/uploads/${p.imagen}`}
+                                                                src={`${API_BASE_URL}/uploads/${p.imagen}`}
                                                                 alt={p.nombre}
                                                                 className="w-12 h-12 object-cover rounded-xl border-2 border-gray-200 shadow-sm"
                                                             />
@@ -369,7 +370,7 @@ export default function AgregarVentas() {
                                     <div className="flex items-start gap-6">
                                         {producto.imagen ? (
                                             <img
-                                                src={`${import.meta.env.VITE_API_URL}/uploads/${producto.imagen}`}
+                                                src={`${API_BASE_URL}/uploads/${producto.imagen}`}
                                                 alt={producto.nombre}
                                                 className="w-24 h-24 object-cover rounded-2xl border-2 border-white shadow-lg"
                                             />
@@ -531,7 +532,7 @@ export default function AgregarVentas() {
                                     ventaData.evento_id = eventoSeleccionado;
                                 }
 
-                                const res = await fetch(`${import.meta.env.VITE_API_URL}/api/ventas`, {
+                                const res = await fetch(`${API_BASE_URL}/api/ventas`, {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify(ventaData),

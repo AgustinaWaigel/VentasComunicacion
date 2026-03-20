@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
+import { API_BASE_URL } from "../config/api";
 
 interface DetalleVenta {
   id: number;
@@ -56,7 +57,7 @@ export default function VerVentas() {
 
   useEffect(() => {
     // Cargar ventas
-    fetch(`${import.meta.env.VITE_API_URL}/api/ventas`)
+    fetch(`${API_BASE_URL}/api/ventas`)
       .then(async (res) => {
         if (!res.ok) {
           const text = await res.text();
@@ -71,7 +72,7 @@ export default function VerVentas() {
       .catch((err) => console.error("Error al cargar ventas:", err));
 
     // Cargar eventos
-    fetch(`${import.meta.env.VITE_API_URL}/api/eventos`)
+    fetch(`${API_BASE_URL}/api/eventos`)
       .then(async (res) => {
         if (!res.ok) {
           const text = await res.text();
@@ -243,7 +244,7 @@ export default function VerVentas() {
   const eliminarVenta = async (id: number) => {
     if (!confirm("¿Estás seguro de que quieres eliminar esta venta?")) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/ventas/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/ventas/${id}`, {
         method: "DELETE",
       });
 
@@ -657,7 +658,7 @@ export default function VerVentas() {
                                 <button
                                   onClick={async () => {
                                     try {
-                                      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/ventas/${v.id}`, {
+                                      const res = await fetch(`${API_BASE_URL}/api/ventas/${v.id}`, {
                                         method: "PUT",
                                         headers: { "Content-Type": "application/json" },
                                         body: JSON.stringify({
