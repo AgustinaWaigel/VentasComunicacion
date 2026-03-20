@@ -21,13 +21,28 @@ const corsOptions = {
       'http://localhost:3000',
       'http://localhost:5173',
       'http://127.0.0.1:5173',
+      'https://ventas-comu.vercel.app',
     ];
-    const allowedPatterns = [
+    const allowedHostPatterns = [
       /\.vercel\.app$/,
       /\.onrender\.com$/,
       /\.netlify\.app$/,
     ];
-    if (!origin || allowed.includes(origin) || allowedPatterns.some(p => p.test(origin))) {
+
+    let hostname = '';
+    if (origin) {
+      try {
+        hostname = new URL(origin).hostname;
+      } catch {
+        hostname = '';
+      }
+    }
+
+    const isAllowedByHost = hostname
+      ? allowedHostPatterns.some((p) => p.test(hostname))
+      : false;
+
+    if (!origin || allowed.includes(origin) || isAllowedByHost) {
       callback(null, true);
     } else {
       callback(new Error('No permitido por CORS'));
