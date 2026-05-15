@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
 import path from 'path';
 import productosRouter from './routes/productos';
 import ventasRouter from './routes/ventas';
@@ -14,46 +13,50 @@ app.get("/", (req, res) => {
   res.send("El backend funciona correctamente 🚀");
 });
 
-// Configuración CORS para desarrollo y producción
-const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    const allowed = [
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'https://ventas-comu.vercel.app',
-    ];
-    const allowedHostPatterns = [
-      /\.vercel\.app$/,
-      /\.onrender\.com$/,
-      /\.netlify\.app$/,
-    ];
+// CORS explícito para evitar bloqueos en navegadores con frontend en Vercel.
+const allowedOrigins = new Set([
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://ventas-comu.vercel.app',
+]);
 
-    let hostname = '';
-    if (origin) {
-      try {
-        hostname = new URL(origin).hostname;
-      } catch {
-        hostname = '';
-      }
-    }
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
 
-    const isAllowedByHost = hostname
-      ? allowedHostPatterns.some((p) => p.test(hostname))
-      : false;
+  if (!origin) {
+    next();
+    return;
+  }
 
-    if (!origin || allowed.includes(origin) || isAllowedByHost) {
-      callback(null, true);
-    } else {
-      callback(new Error('No permitido por CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-};
+  let hostname = '';
+  try {
+    hostname = new URL(origin).hostname;
+  } catch {
+    hostname = '';
+  }
 
-app.use(cors(corsOptions));
+  const isAllowed =
+    allowedOrigins.has(origin) ||
+    /\.vercel\.app$/.test(hostname) ||
+    /\.onrender\.com$/.test(hostname) ||
+    /\.netlify\.app$/.test(hostname);
+
+  if (isAllowed) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  }
+
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
