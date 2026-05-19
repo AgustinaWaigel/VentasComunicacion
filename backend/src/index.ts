@@ -4,6 +4,8 @@ import path from 'path';
 import productosRouter from './routes/productos';
 import ventasRouter from './routes/ventas';
 import eventosRouter from './routes/eventos';
+import authRouter from './routes/auth';
+
 import prisma from './utils/prismaClient';
 
 const app = express();
@@ -63,6 +65,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/productos', productosRouter);
 app.use('/api/ventas', ventasRouter);
 app.use('/api/eventos', eventosRouter);
+app.use('/api/auth', authRouter);
+
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Conectar Prisma y arrancar servidor

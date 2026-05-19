@@ -1,13 +1,22 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { LogOut, User as UserIcon } from "lucide-react";
 
 export default function Navbar() {
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { isAuthenticated, logout, user } = useAuth();
+  const navigate = useNavigate();
 
-  const links = [
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
+  const adminLinks = [
     { 
-      to: "/", 
+      to: "/admin/ventas", 
       label: "Agregar Venta",
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -16,7 +25,7 @@ export default function Navbar() {
       )
     },
     { 
-      to: "/productos", 
+      to: "/admin/productos", 
       label: "Agregar Producto",
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -25,7 +34,7 @@ export default function Navbar() {
       )
     },
     { 
-      to: "/historial", 
+      to: "/admin/historial", 
       label: "Ver Ventas",
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -34,7 +43,7 @@ export default function Navbar() {
       )
     },
     { 
-      to: "/editar-productos", 
+      to: "/admin/editar-productos", 
       label: "Editar Productos",
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -43,7 +52,7 @@ export default function Navbar() {
       )
     },
     { 
-      to: "/eventos", 
+      to: "/admin/eventos", 
       label: "Eventos",
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,6 +61,20 @@ export default function Navbar() {
       )
     }
   ];
+
+  const publicLinks = [
+    {
+      to: "/",
+      label: "Catálogo",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
+      )
+    }
+  ];
+
+  const links = isAuthenticated ? [...publicLinks, ...adminLinks] : publicLinks;
 
   return (
     <header className="bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-800 text-white shadow-xl fixed w-full top-0 z-50 backdrop-blur-sm">
@@ -106,6 +129,24 @@ export default function Navbar() {
                 </Link>
               );
             })}
+            
+            {isAuthenticated ? (
+              <button
+                onClick={handleLogout}
+                className="ml-4 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white/90 hover:text-white hover:bg-red-500/80 bg-red-500/20 transition-all duration-300"
+                title="Cerrar sesión"
+              >
+                <LogOut size={18} />
+              </button>
+            ) : (
+              <Link
+                to="/login"
+                className="ml-4 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white/90 hover:text-white bg-white/10 hover:bg-white/20 transition-all duration-300"
+              >
+                <UserIcon size={18} />
+                Entrar
+              </Link>
+            )}
           </div>
 
           {/* Botón menú móvil */}
@@ -145,6 +186,26 @@ export default function Navbar() {
                   </Link>
                 );
               })}
+              
+              <div className="border-t border-white/10 my-2 pt-2"></div>
+              {isAuthenticated ? (
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-300 hover:text-red-200 hover:bg-red-500/20 transition-all duration-300"
+                >
+                  <LogOut size={20} />
+                  <span>Cerrar Sesión</span>
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-blue-200 hover:text-white hover:bg-white/10 transition-all duration-300"
+                >
+                  <UserIcon size={20} />
+                  <span>Entrar</span>
+                </Link>
+              )}
             </div>
           </div>
         )}

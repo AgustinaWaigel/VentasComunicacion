@@ -1,7 +1,7 @@
+const isDev = import.meta.env.DEV;
 const envUrl = (import.meta.env.VITE_API_URL || '').trim();
 const fallbackUrl = 'https://ventascomunicacion.onrender.com';
 
-// Si por error VITE_API_URL apunta al frontend, forzar backend real.
 const invalidHosts = ['ventas-comu.vercel.app'];
 
 let normalizedUrl = envUrl;
@@ -16,4 +16,6 @@ try {
 	normalizedUrl = '';
 }
 
-export const API_BASE_URL = normalizedUrl || fallbackUrl;
+export const API_BASE_URL = isDev 
+  ? `http://${window.location.hostname}:5000` 
+  : (normalizedUrl || fallbackUrl);

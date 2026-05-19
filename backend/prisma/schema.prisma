@@ -28,16 +28,26 @@ model Evento {
 }
 
 model Venta {
-  id          Int      @id @default(autoincrement())
-  fecha       DateTime @default(now())
-  total       Float
-  ganancia    Float    @default(0)
-  metodoPago  String?  @default("efectivo")
-  efectivo    Float?   @default(0)
-  debe        Boolean  @default(false)
-  eventoId    Int?
-  evento      Evento?  @relation(fields: [eventoId], references: [id])
-  detalles    DetalleVenta[]
+  id              Int      @id @default(autoincrement())
+  fecha           DateTime @default(now())
+  total           Float
+  ganancia        Float    @default(0)
+  metodoPago      String?  @default("efectivo")
+  efectivo        Float?   @default(0)
+  debe            Boolean  @default(false)
+  
+  // Nuevos campos para E-commerce
+  estado          String   @default("completado") // pendiente_pago, preparando, listo, entregado, completado
+  clienteNombre   String?
+  clienteTelefono String?
+  clienteDireccion String?
+  mpPreferenceId  String?
+  mpPaymentId     String?
+  tipoEntrega     String?  @default("retiro") // retiro, envio
+
+  eventoId        Int?
+  evento          Evento?  @relation(fields: [eventoId], references: [id])
+  detalles        DetalleVenta[]
 }
 
 model DetalleVenta {
@@ -49,4 +59,20 @@ model DetalleVenta {
   ganancia   Float    @default(0)
   venta      Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
   producto   Producto @relation(fields: [productoId], references: [id])
+}
+
+model Usuario {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  rol       String   @default("admin")
+  createdAt DateTime @default(now())
+}
+
+model SuscripcionPush {
+  id          Int      @id @default(autoincrement())
+  endpoint    String   @unique
+  p256dh      String
+  auth        String
+  createdAt   DateTime @default(now())
 }
