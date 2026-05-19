@@ -4,7 +4,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model Producto {
@@ -15,7 +16,18 @@ model Producto {
   costo     Float    @default(0)
   stock     Int      @default(0)
   imagen    String?
+  imagenes  ProductoImagen[]
   detalles  DetalleVenta[]
+}
+
+model ProductoImagen {
+  id        Int      @id @default(autoincrement())
+  productoId Int
+  url       String
+  orden     Int      @default(0)
+  producto  Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  
+  @@index([productoId])
 }
 
 model Evento {

@@ -5,6 +5,8 @@ import productosRouter from './routes/productos';
 import ventasRouter from './routes/ventas';
 import eventosRouter from './routes/eventos';
 import authRouter from './routes/auth';
+import pagosRouter from './routes/pagos';
+import notificacionesRouter from './routes/notificaciones';
 
 import prisma from './utils/prismaClient';
 
@@ -66,6 +68,8 @@ app.use('/api/productos', productosRouter);
 app.use('/api/ventas', ventasRouter);
 app.use('/api/eventos', eventosRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/pagos', pagosRouter);
+app.use('/api/notificaciones', notificacionesRouter);
 
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 

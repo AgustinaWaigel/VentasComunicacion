@@ -1,17 +1,22 @@
-{
-   "compilerOptions": {
-    "target": "es6",
-    "module": "commonjs",
-    "rootDir": "src",
-    "outDir": "dist",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "types": ["node"]
-  },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "prisma.config.ts"
-  ]
+﻿{
+    "compilerOptions":  {
+                            "target":  "es6",
+                            "module":  "commonjs",
+                            "rootDir":  "src",
+                            "outDir":  "dist",
+                            "strict":  true,
+                            "esModuleInterop":  true,
+                            "skipLibCheck":  true,
+                            "types":  [
+                                          "node"
+                                      ]
+                        },
+    "exclude":  [
+                    "node_modules",
+                    "dist",
+                    "prisma.config.ts",
+                    "fix-sequence.ts",
+                    "seed-admin.ts",
+                    "test3.ts"
+                ]
 }

@@ -30,7 +30,7 @@ router.get('/', async (_req: Request, res: Response) => {
     const productos = await prisma.producto.findMany({ orderBy: { id: 'asc' } });
     res.json(productos);
   } catch (error) {
-    console.error(error);
+    console.error('Error al obtener productos:', error);
     res.status(500).json({ error: 'Error al obtener productos' });
   }
 });
@@ -39,7 +39,14 @@ router.get('/', async (_req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
-    const producto = await prisma.producto.findUnique({ where: { id } });
+    const producto = await prisma.producto.findUnique({
+      where: { id },
+      include: {
+        imagenes: {
+          orderBy: { orden: 'asc' }
+        }
+      }
+    } as any);
     if (!producto) { res.status(404).send('Producto no encontrado'); return; }
     res.json(producto);
   } catch (error) {
