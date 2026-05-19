@@ -10,6 +10,7 @@ interface DetalleVenta {
   subtotal: number;
   ganancia: number;
   nombre: string;
+  costo: number;
 }
 
 interface Venta {
@@ -141,7 +142,9 @@ export default function VerVentas() {
       "Hora": "Hora",
       "Producto": "Producto",
       "Cantidad": "Cantidad",
+      "Costo unitario ($)": "Costo unitario ($)",
       "Precio unitario ($)": "Precio unitario ($)",
+      "Costo Total ($)": "Costo Total ($)",
       "Subtotal ($)": "Subtotal ($)",
       "Forma de pago": "Forma de pago",
       "Estado deuda": "Estado deuda",
@@ -150,6 +153,10 @@ export default function VerVentas() {
     let totalGeneral = 0;
     let totalEfectivo = 0;
     let totalTransferencia = 0;
+    let costoTotalGeneral = 0;
+    
+    // Objeto para agrupar costos por producto
+    const costosPorProducto: {[key: string]: {nombre: string, cantidad: number, costoTotal: number}} = {};
 
     ventasDelEvento.forEach((venta) => {
       const fecha = new Date(venta.fecha);
@@ -160,17 +167,36 @@ export default function VerVentas() {
 
       venta.detalles.forEach((d) => {
         const precioUnitario = d.cantidad > 0 ? d.subtotal / d.cantidad : 0;
+        const costoUnitario = d.costo || 0;
+        const costoTotal = costoUnitario * d.cantidad;
+        
         filas.push({
           "N° Venta": venta.id,
           "Fecha": fechaStr,
           "Hora": horaStr,
           "Producto": d.nombre,
           "Cantidad": d.cantidad,
+          "Costo unitario ($)": costoUnitario.toFixed(2),
           "Precio unitario ($)": precioUnitario.toFixed(2),
+          "Costo Total ($)": costoTotal.toFixed(2),
           "Subtotal ($)": d.subtotal.toFixed(2),
           "Forma de pago": formaPago,
           "Estado deuda": deuda,
         });
+        
+        // Acumular costos totales
+        costoTotalGeneral += costoTotal;
+        
+        // Agrupar costos por producto
+        if (!costosPorProducto[d.producto_id]) {
+          costosPorProducto[d.producto_id] = {
+            nombre: d.nombre,
+            cantidad: 0,
+            costoTotal: 0
+          };
+        }
+        costosPorProducto[d.producto_id].cantidad += d.cantidad;
+        costosPorProducto[d.producto_id].costoTotal += costoTotal;
       });
 
       totalGeneral += venta.total;
@@ -191,7 +217,9 @@ export default function VerVentas() {
       "Hora": "",
       "Producto": "TOTAL GENERAL",
       "Cantidad": "",
+      "Costo unitario ($)": "",
       "Precio unitario ($)": "",
+      "Costo Total ($)": costoTotalGeneral.toFixed(2),
       "Subtotal ($)": totalGeneral.toFixed(2),
       "Forma de pago": "",
       "Estado deuda": "",
@@ -202,7 +230,9 @@ export default function VerVentas() {
       "Hora": "",
       "Producto": "Total Efectivo",
       "Cantidad": "",
+      "Costo unitario ($)": "",
       "Precio unitario ($)": "",
+      "Costo Total ($)": "",
       "Subtotal ($)": totalEfectivo.toFixed(2),
       "Forma de pago": "Efectivo",
       "Estado deuda": "",
@@ -213,10 +243,61 @@ export default function VerVentas() {
       "Hora": "",
       "Producto": "Total Transferencia",
       "Cantidad": "",
+      "Costo unitario ($)": "",
       "Precio unitario ($)": "",
+      "Costo Total ($)": "",
       "Subtotal ($)": totalTransferencia.toFixed(2),
       "Forma de pago": "Transferencia",
       "Estado deuda": "",
+    });
+
+    // Fila vacía de separador
+    filas.push({});
+
+    // Resumen de costos por producto
+    filas.push({
+      "N° Venta": "",
+      "Fecha": "",
+      "Hora": "",
+      "Producto": "RESUMEN DE COSTOS POR PRODUCTO",
+      "Cantidad": "",
+      "Costo unitario ($)": "",
+      "Precio unitario ($)": "",
+      "Costo Total ($)": "",
+      "Subtotal ($)": "",
+      "Forma de pago": "",
+      "Estado deuda": "",
+    });
+
+    filas.push({
+      "N° Venta": "",
+      "Fecha": "",
+      "Hora": "",
+      "Producto": "Producto",
+      "Cantidad": "Cantidad",
+      "Costo unitario ($)": "",
+      "Precio unitario ($)": "",
+      "Costo Total ($)": "Costo Total",
+      "Subtotal ($)": "",
+      "Forma de pago": "",
+      "Estado deuda": "",
+    });
+
+    // Agregar cada producto al resumen
+    Object.values(costosPorProducto).forEach((prod) => {
+      filas.push({
+        "N° Venta": "",
+        "Fecha": "",
+        "Hora": "",
+        "Producto": prod.nombre,
+        "Cantidad": prod.cantidad,
+        "Costo unitario ($)": "",
+        "Precio unitario ($)": "",
+        "Costo Total ($)": prod.costoTotal.toFixed(2),
+        "Subtotal ($)": "",
+        "Forma de pago": "",
+        "Estado deuda": "",
+      });
     });
 
     // Crear libro
@@ -227,7 +308,9 @@ export default function VerVentas() {
       { wch: 8 },  // Hora
       { wch: 28 }, // Producto
       { wch: 10 }, // Cantidad
-      { wch: 20 }, // Precio unitario
+      { wch: 16 }, // Costo unitario
+      { wch: 16 }, // Precio unitario
+      { wch: 16 }, // Costo Total
       { wch: 14 }, // Subtotal
       { wch: 16 }, // Forma de pago
       { wch: 14 }, // Estado deuda

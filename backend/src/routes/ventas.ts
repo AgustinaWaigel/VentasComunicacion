@@ -35,25 +35,7 @@ router.get('/', async (_req: Request, res: Response) => {
         subtotal: d.subtotal,
         ganancia: d.ganancia,
         nombre: d.producto?.nombre ?? 'Desconocido',
-      })),
-    }));
-
-    res.json(resultado);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al obtener ventas' });
-  }
-});
-
-// POST /api/ventas
-router.post('/', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { items, metodoPago, efectivo, debe, evento_id } = req.body;
-
-    if (!Array.isArray(items) || items.length === 0) {
-      res.status(400).send('Venta vacia o malformateada');
-      return;
-    }
+        costo: d.producto?.costo ?? 0,
 
     let total = 0;
     let gananciaTotal = 0;
