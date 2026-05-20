@@ -36,6 +36,21 @@ router.get('/', async (_req: Request, res: Response) => {
         ganancia: d.ganancia,
         nombre: d.producto?.nombre ?? 'Desconocido',
         costo: d.producto?.costo ?? 0,
+      })),
+    }));
+
+    res.json(resultado);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Error al cargar ventas' });
+  }
+});
+
+// POST /api/ventas
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const { items, metodoPago, efectivo, debe, evento_id } = req.body;
+    if (!items || !Array.isArray(items)) { res.status(400).json({ error: 'items debe ser un arreglo' }); return; }
 
     let total = 0;
     let gananciaTotal = 0;

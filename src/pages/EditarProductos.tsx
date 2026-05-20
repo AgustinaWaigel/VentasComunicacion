@@ -16,6 +16,18 @@ export default function EditarProductos() {
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [imagenNueva, setImagenNueva] = useState<File | null>(null);
   const [mensaje, setMensaje] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+
+  // Filtrar productos
+  const productosFiltrados = productos.filter((p) => {
+    const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase());
+    const coincideCategoria = filtroCategoria === "" || p.categoria === filtroCategoria;
+    return coincideBusqueda && coincideCategoria;
+  });
+
+  // Obtener categorías únicas
+  const categorias = Array.from(new Set(productos.map((p) => p.categoria).filter(Boolean)));
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/api/productos`)
@@ -113,16 +125,65 @@ export default function EditarProductos() {
               </div>
             )}
 
-            {productos.length === 0 ? (
+            {/* Filtros de búsqueda */}
+            <div className="mb-8 bg-gray-50 rounded-2xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
+                </svg>
+                <h3 className="text-lg font-semibold text-gray-700">Filtros de búsqueda</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    Buscar por nombre
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="🔍 Escribe el nombre del producto..."
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all"
+                  />
+                </div>
+                
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                    </svg>
+                    Filtrar por categoría
+                  </label>
+                  <select
+                    value={filtroCategoria}
+                    onChange={(e) => setFiltroCategoria(e.target.value)}
+                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition-all"
+                  >
+                    <option value="">📋 Todas las categorías ({productos.length})</option>
+                    {categorias.map((categoria) => (
+                      <option key={categoria} value={categoria}>
+                        {categoria} ({productos.filter((p) => p.categoria === categoria).length})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {productosFiltrados.length === 0 ? (
               <div className="text-center py-12">
                 <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
-                <p className="text-gray-500 text-lg">No hay productos para editar</p>
+                <p className="text-gray-500 text-lg">No hay productos que coincidan con el filtro</p>
               </div>
             ) : (
               <div className="grid gap-6">
-                {productos.map((p) => (
+                {productosFiltrados.map((p) => (
                   <div key={p.id} className="bg-gradient-to-r from-gray-50 to-white rounded-2xl border-2 border-gray-100 p-6 hover:shadow-lg transition-all duration-300">
                     <div className="flex flex-col lg:flex-row gap-6">
                       {/* Imagen del producto */}

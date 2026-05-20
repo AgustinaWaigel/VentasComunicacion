@@ -42,6 +42,8 @@ export default function VerVentas() {
   const [filtroNombre, setFiltroNombre] = useState("");
   const [filtroEvento, setFiltroEvento] = useState<string>("");
   const [ventaEditando, setVentaEditando] = useState<number | null>(null);
+  const [eventoCargado, setEventoCargado] = useState(false);
+  const [ventasSeleccionadas, setVentasSeleccionadas] = useState<Set<number>>(new Set());
   
   // Filtrar ventas
   const ventasFiltradas = ventas.filter(venta => {
@@ -83,6 +85,14 @@ export default function VerVentas() {
       })
       .then((data) => {
         setEventos(data);
+        // Establecer el evento más reciente como el predeterminado
+        if (data.length > 0 && !eventoCargado) {
+          const eventoMasReciente = data.reduce((latest: Evento, current: Evento) => {
+            return new Date(current.fecha) > new Date(latest.fecha) ? current : latest;
+          });
+          setFiltroEvento(eventoMasReciente.id.toString());
+          setEventoCargado(true);
+        }
       })
       .catch((err) => console.error("Error al cargar eventos:", err));
   }, []);
@@ -310,12 +320,54 @@ export default function VerVentas() {
       if (!res.ok) throw new Error(`Error al eliminar la venta: ${res.statusText}`);
 
       setVentas((prev) => prev.filter((v) => v.id !== id));
+      setVentasSeleccionadas(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
     } catch (error) {
       console.error("Error al eliminar la venta:", error);
       alert("Error al eliminar la venta. Por favor, inténtalo de nuevo.");
     }
-
   }
+
+  // Funciones para manejo de selección
+  const toggleSeleccion = (id: number) => {
+    const newSet = new Set(ventasSeleccionadas);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setVentasSeleccionadas(newSet);
+  };
+
+  const seleccionarTodas = () => {
+    if (ventasSeleccionadas.size === ventasFiltradas.length) {
+      setVentasSeleccionadas(new Set());
+    } else {
+      setVentasSeleccionadas(new Set(ventasFiltradas.map(v => v.id)));
+    }
+  };
+
+  const eliminarSeleccionadas = async () => {
+    if (ventasSeleccionadas.size === 0) return;
+    if (!confirm(`¿Estás seguro de que quieres eliminar ${ventasSeleccionadas.size} venta(s)?`)) return;
+
+    try {
+      for (const id of ventasSeleccionadas) {
+        await fetch(`${API_BASE_URL}/api/ventas/${id}`, {
+          method: "DELETE",
+        });
+      }
+      setVentas((prev) => prev.filter((v) => !ventasSeleccionadas.has(v.id)));
+      setVentasSeleccionadas(new Set());
+      alert(`✅ Se eliminaron ${ventasSeleccionadas.size} venta(s) correctamente`);
+    } catch (error) {
+      console.error("Error al eliminar ventas:", error);
+      alert("❌ Error al eliminar ventas. Por favor, inténtalo de nuevo.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 pt-24">
@@ -548,87 +600,128 @@ export default function VerVentas() {
                       {ventasFiltradas.length} {ventasFiltradas.length === 1 ? 'venta' : 'ventas'}
                     </span>
                   </div>
-                  <button
-                    onClick={() => {
-                      const nombreVista = filtroEvento === ""
-                        ? "Todas las ventas"
-                        : filtroEvento === "campamento-adolescentes"
-                        ? "Campamento Adolescentes 2025"
-                        : (eventos.find(e => e.id.toString() === filtroEvento)?.nombre ?? "Evento");
-                      exportarExcelEvento(nombreVista, ventasFiltradas);
-                    }}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-xl transition-colors shadow"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Exportar Excel
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {ventasSeleccionadas.size > 0 && (
+                      <>
+                        <span className="text-sm font-medium text-gray-600">
+                          {ventasSeleccionadas.size} seleccionada{ventasSeleccionadas.size !== 1 ? 's' : ''}
+                        </span>
+                        <button
+                          onClick={eliminarSeleccionadas}
+                          className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-xl transition-colors shadow"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Eliminar seleccionadas
+                        </button>
+                      </>
+                    )}
+                    <button
+                      onClick={() => {
+                        const nombreVista = filtroEvento === ""
+                          ? "Todas las ventas"
+                          : filtroEvento === "campamento-adolescentes"
+                          ? "Campamento Adolescentes 2025"
+                          : (eventos.find(e => e.id.toString() === filtroEvento)?.nombre ?? "Evento");
+                        exportarExcelEvento(nombreVista, ventasFiltradas);
+                      }}
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-xl transition-colors shadow"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Exportar Excel
+                    </button>
+                  </div>
                 </div>
+
+                {/* Opción de seleccionar todas */}
+                {ventasFiltradas.length > 0 && (
+                  <div className="mb-4 flex items-center gap-3 bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
+                    <input
+                      type="checkbox"
+                      checked={ventasSeleccionadas.size === ventasFiltradas.length && ventasFiltradas.length > 0}
+                      onChange={seleccionarTodas}
+                      className="w-5 h-5 text-blue-600 cursor-pointer rounded focus:ring-2"
+                    />
+                    <label className="text-sm font-medium text-blue-700 cursor-pointer flex-1">
+                      {ventasSeleccionadas.size === ventasFiltradas.length ? "Deseleccionar todas" : "Seleccionar todas"} ({ventasFiltradas.length})
+                    </label>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   {ventasFiltradas.map((v, index) => (
-                    <div key={v.id} className="bg-white border-2 border-gray-100 rounded-2xl p-6 hover:shadow-lg transition-all duration-300">
+                    <div key={v.id} className={`bg-white border-2 rounded-2xl p-6 hover:shadow-lg transition-all duration-300 ${ventasSeleccionadas.has(v.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-100'}`}>
                       <div className="flex flex-col lg:flex-row gap-6">
-                        {/* Información principal */}
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-xl flex items-center justify-center font-bold text-sm">
-                                #{ventasFiltradas.length - index}
+                        {/* Checkbox y información principal */}
+                        <div className="flex flex-1 gap-4">
+                          <input
+                            type="checkbox"
+                            checked={ventasSeleccionadas.has(v.id)}
+                            onChange={() => toggleSeleccion(v.id)}
+                            className="w-5 h-5 text-blue-600 cursor-pointer rounded focus:ring-2 flex-shrink-0 mt-1"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-xl flex items-center justify-center font-bold text-sm">
+                                  #{ventasFiltradas.length - index}
+                                </div>
+                                <div>
+                                  <p className="font-semibold text-gray-800">
+                                    {new Date(v.fecha).toLocaleDateString("es-AR", {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      year: 'numeric'
+                                    })}
+                                  </p>
+                                  <p className="text-sm text-gray-500">
+                                    {new Date(v.fecha).toLocaleTimeString("es-AR", {
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </p>
+                                </div>
                               </div>
+
+                              {/* Badge del evento */}
                               <div>
-                                <p className="font-semibold text-gray-800">
-                                  {new Date(v.fecha).toLocaleDateString("es-AR", {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    year: 'numeric'
-                                  })}
-                                </p>
-                                <p className="text-sm text-gray-500">
-                                  {new Date(v.fecha).toLocaleTimeString("es-AR", {
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  })}
-                                </p>
+                                {v.evento_nombre && v.evento_nombre !== "Campamento Adolescentes 2025" ? (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                    📅 {v.evento_nombre}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                                    🏕️ Campamento Adolescentes 2025
+                                  </span>
+                                )}
                               </div>
                             </div>
 
-                            {/* Badge del evento */}
-                            <div>
-                              {v.evento_nombre && v.evento_nombre !== "Campamento Adolescentes 2025" ? (
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                                  📅 {v.evento_nombre}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                                  🏕️ Campamento Adolescentes 2025
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Productos */}
-                          <div className="mb-4">
-                            <h4 className="font-medium text-gray-700 mb-2 flex items-center gap-2">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                              </svg>
-                              Productos vendidos
-                            </h4>
-                            <div className="bg-gray-50 rounded-xl p-3">
-                              <ul className="space-y-2">
-                                {v.detalles.map((d) => (
-                                  <li key={d.id} className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-700">
-                                      <strong>{d.nombre}</strong> × {d.cantidad}
-                                    </span>
-                                    <span className="font-semibold text-green-600">
-                                      ${d.subtotal.toFixed(2)}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
+                            {/* Productos */}
+                            <div className="mb-4">
+                              <h4 className="font-medium text-gray-700 mb-2 flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                                Productos vendidos
+                              </h4>
+                              <div className="bg-gray-50 rounded-xl p-3">
+                                <ul className="space-y-2">
+                                  {v.detalles.map((d) => (
+                                    <li key={d.id} className="flex justify-between items-center text-sm">
+                                      <span className="text-gray-700">
+                                        <strong>{d.nombre}</strong> × {d.cantidad}
+                                      </span>
+                                      <span className="font-semibold text-green-600">
+                                        ${d.subtotal.toFixed(2)}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
                             </div>
                           </div>
                         </div>
