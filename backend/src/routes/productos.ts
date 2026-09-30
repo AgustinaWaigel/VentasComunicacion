@@ -26,9 +26,14 @@ const upload = multer({ storage });
 
 // GET /api/productos
 router.get('/', async (_req: Request, res: Response) => {
+  const start = performance.now();
   try {
     const productos = await prisma.producto.findMany({ orderBy: { id: 'asc' } });
-    res.json(productos);
+    const queried = performance.now();
+    const body = JSON.stringify(productos);
+    res.setHeader('Server-Timing', `db;dur=${(queried - start).toFixed(1)},serialize;dur=${(performance.now() - queried).toFixed(1)}`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.type('json').send(body);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al obtener productos' });

@@ -1,0 +1,49 @@
+[
+  {
+    "test": "real product load",
+    "count": 34,
+    "timing": [
+      1384
+    ]
+  },
+  {
+    "test": "screen",
+    "route": "/productos",
+    "heading": "Agregar producto"
+  },
+  {
+    "test": "screen",
+    "route": "/editar-productos",
+    "heading": "Productos"
+  },
+  {
+    "test": "screen",
+    "route": "/eventos",
+    "heading": "Eventos"
+  },
+  {
+    "test": "screen",
+    "route": "/historial",
+    "heading": "Historial de ventas"
+  },
+  {
+    "test": "two clicks / one POST / cash / event",
+    "pass": true
+  },
+  {
+    "test": "merged quantities / stock limit / change / transfer / debt",
+    "pass": true
+  },
+  {
+    "test": "failed sale preserves items",
+    "pass": true
+  },
+  {
+    "test": "load error / retry / empty / search",
+    "pass": true
+  },
+  {
+    "test": "mobile two clicks / 390px and 320px no overflow",
+    "pass": true
+  }
+]

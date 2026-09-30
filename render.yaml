@@ -3,7 +3,9 @@ services:
   - type: web
     name: ventasiam-api
     env: node
-    plan: free
+    # Apply only after approving the paid instance in Render. Free sleeps on idle.
+    plan: starter
+    healthCheckPath: /health
     rootDir: backend
     buildCommand: npm ci && npx prisma generate && npm run build
     startCommand: node dist/index.js

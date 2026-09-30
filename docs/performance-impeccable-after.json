@@ -1,0 +1,158 @@
+[
+  {
+    "width": 1440,
+    "sample": 1,
+    "visibleMs": 279,
+    "api": [
+      {
+        "durationMs": 5,
+        "ttfbMs": 0,
+        "server": []
+      },
+      {
+        "durationMs": 233,
+        "ttfbMs": 226,
+        "server": [
+          {
+            "name": "db",
+            "ms": 225
+          },
+          {
+            "name": "serialize",
+            "ms": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "width": 1440,
+    "sample": 2,
+    "visibleMs": 272,
+    "api": [
+      {
+        "durationMs": 4,
+        "ttfbMs": 0,
+        "server": []
+      },
+      {
+        "durationMs": 236,
+        "ttfbMs": 232,
+        "server": [
+          {
+            "name": "db",
+            "ms": 230.6
+          },
+          {
+            "name": "serialize",
+            "ms": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "width": 1440,
+    "sample": 3,
+    "visibleMs": 259,
+    "api": [
+      {
+        "durationMs": 7,
+        "ttfbMs": 0,
+        "server": []
+      },
+      {
+        "durationMs": 233,
+        "ttfbMs": 229,
+        "server": [
+          {
+            "name": "db",
+            "ms": 225
+          },
+          {
+            "name": "serialize",
+            "ms": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "sample": 1,
+    "visibleMs": 277,
+    "api": [
+      {
+        "durationMs": 4,
+        "ttfbMs": 0,
+        "server": []
+      },
+      {
+        "durationMs": 236,
+        "ttfbMs": 231,
+        "server": [
+          {
+            "name": "db",
+            "ms": 230.1
+          },
+          {
+            "name": "serialize",
+            "ms": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "sample": 2,
+    "visibleMs": 268,
+    "api": [
+      {
+        "durationMs": 3,
+        "ttfbMs": 0,
+        "server": []
+      },
+      {
+        "durationMs": 237,
+        "ttfbMs": 233,
+        "server": [
+          {
+            "name": "db",
+            "ms": 231.6
+          },
+          {
+            "name": "serialize",
+            "ms": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "sample": 3,
+    "visibleMs": 268,
+    "api": [
+      {
+        "durationMs": 3,
+        "ttfbMs": 0,
+        "server": []
+      },
+      {
+        "durationMs": 239,
+        "ttfbMs": 234,
+        "server": [
+          {
+            "name": "db",
+            "ms": 232
+          },
+          {
+            "name": "serialize",
+            "ms": 0.1
+          }
+        ]
+      }
+    ]
+  }
+]

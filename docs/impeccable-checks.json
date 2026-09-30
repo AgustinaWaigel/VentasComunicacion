@@ -1,0 +1,59 @@
+[
+  {
+    "width": 320,
+    "overflow": false,
+    "keyboard": true,
+    "accentSearch": true,
+    "refreshPreservesProducts": true
+  },
+  {
+    "width": 390,
+    "overflow": false,
+    "keyboard": true,
+    "accentSearch": true,
+    "refreshPreservesProducts": true
+  },
+  {
+    "width": 768,
+    "overflow": false,
+    "keyboard": true,
+    "accentSearch": true,
+    "refreshPreservesProducts": true
+  },
+  {
+    "width": 1440,
+    "overflow": false,
+    "keyboard": true,
+    "accentSearch": true,
+    "refreshPreservesProducts": true
+  },
+  {
+    "mobileSaleErrorVisible": true,
+    "retainsSale": true,
+    "posts": 5
+  },
+  {
+    "contrast": [
+      {
+        "selector": ".product-info h3",
+        "ratio": 11.44
+      },
+      {
+        "selector": ".product-price",
+        "ratio": 11.44
+      },
+      {
+        "selector": ".availability",
+        "ratio": 6.27
+      },
+      {
+        "selector": ".product-category",
+        "ratio": 5.48
+      },
+      {
+        "selector": ".search-box input",
+        "ratio": 5.48
+      }
+    ]
+  }
+]

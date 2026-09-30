@@ -1,0 +1,53 @@
+[
+  {
+    "test": "checkout visible with 12 products",
+    "width": 1366,
+    "height": 768
+  },
+  {
+    "test": "checkout visible with 12 products",
+    "width": 1024,
+    "height": 600
+  },
+  {
+    "test": "checkout visible with 12 products",
+    "width": 1440,
+    "height": 900
+  },
+  {
+    "test": "responsive page",
+    "route": "/productos"
+  },
+  {
+    "test": "responsive page",
+    "route": "/editar-productos"
+  },
+  {
+    "test": "responsive page",
+    "route": "/eventos"
+  },
+  {
+    "test": "responsive page",
+    "route": "/historial"
+  },
+  {
+    "test": "create product",
+    "pass": true
+  },
+  {
+    "test": "edit / cancel / failed save / retry product",
+    "pass": true
+  },
+  {
+    "test": "event create / edit / deactivate / results",
+    "pass": true
+  },
+  {
+    "test": "payment edit / Excel / partial failed deletion",
+    "pass": true
+  },
+  {
+    "test": "load error / retry",
+    "pass": true
+  }
+]

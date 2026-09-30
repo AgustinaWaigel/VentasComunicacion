@@ -1,18 +1,21 @@
 import type { ReactNode } from "react";
 import Navbar from "./Navbar";
-
 export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-gray-100 text-gray-900">
+    <div className="site-shell">
+      <a className="skip-link" href="#contenido">
+        Ir al contenido
+      </a>
       <Navbar />
-      <main
-        className="pt-50 sm:px-6 max-w-6xl mx-auto"
-        style={{ paddingTop: "80px" }} // 👈 esto fuerza el espacio
-      >
+      <main id="contenido" className="site-main">
         {children}
       </main>
-      <footer className="mt-12 text-center text-sm text-gray-500 py-6">
-        © {new Date().getFullYear()} IAM Paraná — Ventas del area de comunicación.
+      <footer className="site-footer">
+        <span>
+          IAM PARANÁ <b>·</b> Comunicación
+        </span>
+        <span>Gestión de ventas del área de Comunicación.</span>
+        <small>© {new Date().getFullYear()} IAM Paraná</small>
       </footer>
     </div>
   );

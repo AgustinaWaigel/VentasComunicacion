@@ -16,6 +16,7 @@ app.get("/", (req, res) => {
 // CORS explícito para evitar bloqueos en navegadores con frontend en Vercel.
 const allowedOrigins = new Set([
   'http://localhost:3000',
+  'http://127.0.0.1:3000',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'https://ventas-comu.vercel.app',
@@ -48,6 +49,8 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+    res.setHeader('Access-Control-Expose-Headers', 'Server-Timing');
+    res.setHeader('Timing-Allow-Origin', origin);
   }
 
   if (req.method === 'OPTIONS') {
@@ -63,7 +66,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/productos', productosRouter);
 app.use('/api/ventas', ventasRouter);
 app.use('/api/eventos', eventosRouter);
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), { maxAge: '7d' }));
+app.get('/health', (_req, res) => { res.json({ ok: true }); });
 
 // Conectar Prisma y arrancar servidor
 prisma.$connect()

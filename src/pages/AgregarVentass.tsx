@@ -1,562 +1,822 @@
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { API_BASE_URL } from "../config/api";
-import * as XLSX from "xlsx";
-import ModalResumenVenta from "../components/ModalResumenVenta";
+import type { ItemCarrito } from "../types";
 
 interface Producto {
-    id: number;
-    nombre: string;
-    precio: number;
-    costo: number;
-    stock: number;
-    imagen?: string;
+  id: number;
+  nombre: string;
+  categoria?: string;
+  precio: number;
+  costo: number;
+  stock: number;
+  imagen?: string;
 }
-
 interface Evento {
-    id: number;
-    nombre: string;
-    fecha: string;
-    descripcion?: string;
-    activo: boolean;
+  id: number;
+  nombre: string;
+  fecha: string;
+  activo: boolean;
 }
+const formatoMoneda = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "ARS",
+  maximumFractionDigits: 2,
+});
+const moneda = (n: number) => formatoMoneda.format(n);
+const normalizar = (text: string) =>
+  text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .trim();
 
-export interface ItemCarrito {
-    producto_id: number;
-    nombre: string;
-    cantidad: number;
-    subtotal: number;
-    ganancia: number;
+function Foto({
+  producto,
+  prioritaria,
+}: {
+  producto: Producto;
+  prioritaria: boolean;
+}) {
+  const [fallo, setFallo] = useState(false);
+  return (
+    <div className="product-photo">
+      {producto.imagen && !fallo ? (
+        <img
+          src={`${API_BASE_URL}/uploads/${encodeURIComponent(producto.imagen)}`}
+          alt={producto.nombre}
+          width="320"
+          height="240"
+          loading={prioritaria ? "eager" : "lazy"}
+          decoding="async"
+          onError={() => setFallo(true)}
+        />
+      ) : (
+        <div className="photo-placeholder">
+          <svg aria-hidden="true" viewBox="0 0 48 48" fill="none">
+            <path
+              d="m9 15 15-8 15 8v18l-15 8-15-8V15Zm0 0 15 8 15-8M24 23v18M17 11l15 8"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+          </svg>
+          <span>Foto no disponible</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AgregarVentas() {
-    const [productos, setProductos] = useState<Producto[]>([]);
-    const [eventos, setEventos] = useState<Evento[]>([]);
-    const [eventoSeleccionado, setEventoSeleccionado] = useState<number | "">("");
-    const [productoSeleccionado, setProductoSeleccionado] = useState<number | "">("");
-    const [cantidad, setCantidad] = useState<number>(1);
-    const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
-    const [mensaje, setMensaje] = useState("");
-    const [busqueda, setBusqueda] = useState("");
-    const [mostrarOpciones, setMostrarOpciones] = useState(false);
-    const [mostrarModal, setMostrarModal] = useState(false);
-    const [efectivo, setEfectivo] = useState<number>(0);
-
-    const [metodoPago, setMetodoPago] = useState<"efectivo" | "transferencia">("efectivo");
-    const [debe, setDebe] = useState(false);
-
-    useEffect(() => {
-        // Cargar productos
-        fetch(`${API_BASE_URL}/api/productos`)
-            .then(async (res) => {
-                if (!res.ok) {
-                    const text = await res.text();
-                    throw new Error(`Error HTTP ${res.status}: ${text}`);
-                }
-                return res.json();
-            })
-            .then((data) => {
-                setProductos(data);
-            })
-            .catch((err) => {
-                console.error("❌ Error al obtener productos:", err.message);
-            });
-
-        // Cargar eventos activos
-        fetch(`${API_BASE_URL}/api/eventos`)
-            .then(async (res) => {
-                if (!res.ok) {
-                    const text = await res.text();
-                    throw new Error(`Error HTTP ${res.status}: ${text}`);
-                }
-                return res.json();
-            })
-            .then((data) => {
-                // Filtrar solo eventos activos y ordenar por ID (más reciente primero)
-                const eventosActivos = data
-                    .filter((evento: Evento) => evento.activo)
-                    .sort((a: Evento, b: Evento) => b.id - a.id);
-                
-                setEventos(eventosActivos);
-                
-                // Seleccionar automáticamente el último evento creado (el primero de la lista ordenada)
-                if (eventosActivos.length > 0) {
-                    setEventoSeleccionado(eventosActivos[0].id);
-                }
-            })
-            .catch((err) => {
-                console.error("❌ Error al obtener eventos:", err.message);
-            });
-    }, []);
-
-    const actualizarCantidad = (index: number, nuevaCantidad: number) => {
-        if (nuevaCantidad < 1) return;
-
-        setCarrito((prev) => {
-            const copia = [...prev];
-            const item = copia[index];
-            const producto = productos.find(p => p.id === item.producto_id);
-
-            if (!producto || nuevaCantidad > producto.stock) {
-                setMensaje("❌ Cantidad inválida o sin stock");
-                return prev;
-            }
-
-            const nuevoSubtotal = (item.subtotal / item.cantidad) * nuevaCantidad;
-            const nuevaGanancia = (item.ganancia / item.cantidad) * nuevaCantidad;
-
-            copia[index] = {
-                ...item,
-                cantidad: nuevaCantidad,
-                subtotal: nuevoSubtotal,
-                ganancia: nuevaGanancia,
-            };
-
-            setMensaje("");
-            return copia;
-        });
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [eventos, setEventos] = useState<Evento[]>([]);
+  const [eventoSeleccionado, setEventoSeleccionado] = useState<number | "">("");
+  const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
+  const [mensaje, setMensaje] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [categoria, setCategoria] = useState("Todos");
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState("");
+  const [errorEventos, setErrorEventos] = useState(false);
+  const [cargandoEventos, setCargandoEventos] = useState(true);
+  const [intentoEventos, setIntentoEventos] = useState(0);
+  const [efectivo, setEfectivo] = useState(0);
+  const [metodoPago, setMetodoPago] = useState<"efectivo" | "transferencia">(
+    "efectivo",
+  );
+  const [debe, setDebe] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [errorVenta, setErrorVenta] = useState("");
+  const [demora, setDemora] = useState(false);
+  const busquedaRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const ajustar = () => {
+      const espacio =
+        window.innerHeight -
+        Math.max(16, panel.getBoundingClientRect().top) -
+        16;
+      panel.style.setProperty("--panel-height", `${Math.max(200, espacio)}px`);
     };
-
-    const agregarAlCarrito = () => {
-        const producto = productos.find((p) => p.id === Number(productoSeleccionado));
-        if (!producto) return;
-
-        if (producto.precio <= 0) {
-            setMensaje(`❌ El producto "${producto.nombre}" no tiene precio válido`);
-            return;
-        }
-
-        if (producto.stock <= 0) {
-            setMensaje(`❌ El producto "${producto.nombre}" no tiene stock`);
-            return;
-        }
-
-        if (cantidad <= 0 || cantidad > producto.stock) {
-            setMensaje("❌ Cantidad inválida");
-            return;
-        }
-
-        const subtotal = producto.precio * cantidad;
-        const ganancia = (producto.precio - producto.costo) * cantidad;
-
-        setCarrito((prev) => [
-            ...prev,
-            {
-                producto_id: producto.id,
-                nombre: producto.nombre,
-                cantidad,
-                subtotal,
-                ganancia,
-            },
-        ]);
-
-        setCantidad(1);
-        setProductoSeleccionado("");
-        setBusqueda("");
-        setMensaje("");
-        setMostrarOpciones(false);
+    ajustar();
+    window.addEventListener("resize", ajustar);
+    window.addEventListener("scroll", ajustar, { passive: true });
+    const observer = new ResizeObserver(ajustar);
+    document
+      .querySelectorAll(".sale-context, .sales-heading")
+      .forEach((el) => observer.observe(el));
+    return () => {
+      window.removeEventListener("resize", ajustar);
+      window.removeEventListener("scroll", ajustar);
+      observer.disconnect();
     };
+  }, []);
+  const enviando = useRef(false);
+  const peticion = useRef<AbortController | null>(null);
 
-    const eliminarItem = (index: number) => {
-        setCarrito(carrito.filter((_, i) => i !== index));
+  const cargarProductos = useCallback(async () => {
+    peticion.current?.abort();
+    const controller = new AbortController();
+    peticion.current = controller;
+    const timeout = window.setTimeout(() => controller.abort("timeout"), 65000);
+    const start = performance.now();
+    setDemora(false);
+    const aviso = window.setTimeout(() => setDemora(true), 8000);
+    setCargando(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/productos`, {
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      if (!res.ok)
+        throw new Error(
+          "El servidor no pudo devolver los productos. Volvé a intentar en unos momentos.",
+        );
+      const data: Producto[] = await res.json();
+      if (!Array.isArray(data)) throw new Error("Formato");
+      if (peticion.current !== controller) return;
+      setProductos(data);
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          performance.measure("iam:productos-visibles", {
+            start,
+            end: performance.now(),
+          });
+        }),
+      );
+    } catch (cause) {
+      if (controller.signal.aborted && controller.signal.reason !== "timeout")
+        return;
+      setError(
+        controller.signal.reason === "timeout"
+          ? "El servidor no respondió a tiempo. Volvé a intentar."
+          : !navigator.onLine
+            ? "No hay conexión. Revisá internet y volvé a intentar."
+            : cause instanceof Error && cause.message.startsWith("El servidor")
+              ? cause.message
+              : "No pudimos conectar con el servidor. Volvé a intentar.",
+      );
+    } finally {
+      clearTimeout(timeout);
+      clearTimeout(aviso);
+      if (peticion.current === controller) {
+        setCargando(false);
+        setDemora(false);
+      }
+    }
+  }, []);
+  useEffect(() => {
+    void cargarProductos();
+    return () => peticion.current?.abort();
+  }, [cargarProductos]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 65000);
+    let mounted = true;
+    setCargandoEventos(true);
+    setErrorEventos(false);
+    fetch(`${API_BASE_URL}/api/eventos`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
+      .then((data: Evento[]) => {
+        const activos = data
+          .filter((e) => e.activo)
+          .sort((a, b) => b.id - a.id);
+        if (mounted) {
+          setEventos(activos);
+          setEventoSeleccionado(activos[0]?.id ?? "");
+        }
+      })
+      .catch(() => {
+        if (mounted) setErrorEventos(true);
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        if (mounted) setCargandoEventos(false);
+      });
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+      controller.abort();
     };
+  }, [intentoEventos]);
 
-    const total = carrito.reduce((sum, i) => sum + i.subtotal, 0);
-    const ganancia = carrito.reduce((sum, i) => sum + i.ganancia, 0);
-
-    const productosFiltrados = productos.filter(p =>
-        p.nombre.toLowerCase().includes(busqueda.toLowerCase())
-    );
-
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
-            <div className="max-w-4xl mx-auto px-4">
-                <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    {/* Header */}
-                    <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
-                        <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 9M7 13l-1.5-9m0 0h2m13 0v6a2 2 0 01-2 2H9a2 2 0 01-2-2V6a2 2 0 012-2h2" />
-                            </svg>
-                            Registrar nueva venta
-                        </h1>
-                        <p className="text-blue-100 mt-2">Gestiona tus ventas de manera rápida y eficiente</p>
-                    </div>
-
-                    <div className="p-8">
-                        {mensaje && (
-                            <div className={`mb-6 p-4 rounded-lg border-l-4 transition-all duration-300 ${
-                                mensaje.startsWith("✅") 
-                                    ? "bg-green-50 border-green-400 text-green-800" 
-                                    : "bg-red-50 border-red-400 text-red-800"
-                            }`}>
-                                <div className="flex items-center">
-                                    <span className="text-lg mr-2">
-                                        {mensaje.startsWith("✅") ? "✅" : "⚠️"}
-                                    </span>
-                                    <p className="font-medium">{mensaje.replace(/^[✅❌]\s*/, "")}</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Selector de Evento */}
-                        <div className="mb-8 bg-gray-50 rounded-xl p-6">
-                            <div className="flex items-center gap-3 mb-4">
-                                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                <label className="text-lg font-semibold text-gray-700">
-                                    Evento
-                                </label>
-                            </div>
-                            <select
-                                value={eventoSeleccionado}
-                                onChange={(e) => setEventoSeleccionado(e.target.value === "" ? "" : Number(e.target.value))}
-                                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-gray-700 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm"
-                            >
-                                <option value="">🏕️ Campamento Adolescentes 2025 (General)</option>
-                                {eventos.map((evento) => (
-                                    <option key={evento.id} value={evento.id}>
-                                        📅 {evento.nombre} - {new Date(evento.fecha).toLocaleDateString()}
-                                    </option>
-                                ))}
-                            </select>
-                            {eventos.length === 0 && (
-                                <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                    <p className="text-sm text-blue-700">
-                                        💡 No hay eventos específicos. 
-                                        <a href="/eventos" className="font-semibold text-blue-600 hover:text-blue-800 ml-1 underline">
-                                            Crear uno aquí
-                                        </a>
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Búsqueda de Productos */}
-                        <div className="mb-8">
-                            <div className="flex items-center gap-3 mb-4">
-                                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                                <h3 className="text-lg font-semibold text-gray-700">Buscar producto</h3>
-                            </div>
-                            
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    placeholder="🔍 Escribe el nombre del producto..."
-                                    value={busqueda}
-                                    onChange={(e) => {
-                                        setBusqueda(e.target.value);
-                                        setProductoSeleccionado("");
-                                        setMostrarOpciones(true);
-                                    }}
-                                    onFocus={() => setMostrarOpciones(true)}
-                                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 pr-12 text-gray-700 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-200 bg-white shadow-sm"
-                                />
-
-                                {busqueda && (
-                                    <button
-                                        onClick={() => {
-                                            setBusqueda("");
-                                            setProductoSeleccionado("");
-                                            setMostrarOpciones(true);
-                                        }}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors duration-200 p-1 rounded-full hover:bg-red-50"
-                                        title="Borrar búsqueda"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
-                                )}
-
-                                {mostrarOpciones && (busqueda.trim() !== "" || productoSeleccionado === "") && (
-                                    <div className="absolute mt-2 w-full border-2 border-gray-100 rounded-xl bg-white shadow-lg max-h-64 overflow-y-auto z-20">
-                                        {productosFiltrados.length > 0 ? (
-                                            <ul className="divide-y divide-gray-100">
-                                                {productosFiltrados.map((p) => (
-                                                    <li
-                                                        key={p.id}
-                                                        onClick={() => {
-                                                            setProductoSeleccionado(p.id);
-                                                            setBusqueda(p.nombre);
-                                                            setMostrarOpciones(false);
-                                                        }}
-                                                        className="px-4 py-3 cursor-pointer hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 flex items-center gap-4 transition-all duration-200"
-                                                    >
-                                                        {p.imagen ? (
-                                                            <img
-                                                                src={`${API_BASE_URL}/uploads/${p.imagen}`}
-                                                                alt={p.nombre}
-                                                                className="w-12 h-12 object-cover rounded-xl border-2 border-gray-200 shadow-sm"
-                                                            />
-                                                        ) : (
-                                                            <div className="w-12 h-12 bg-gradient-to-br from-gray-200 to-gray-300 rounded-xl flex items-center justify-center">
-                                                                <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                                                </svg>
-                                                            </div>
-                                                        )}
-                                                        <div className="flex-1">
-                                                            <p className="font-semibold text-gray-800">{p.nombre}</p>
-                                                            <p className="text-green-600 font-bold">${p.precio}</p>
-                                                        </div>
-                                                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                        </svg>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <div className="p-6 text-center text-gray-500">
-                                                <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.464-.881-6.08-2.33l-.84.72a9 9 0 1313.82 0l-.84-.72z" />
-                                                </svg>
-                                                <p>No se encontraron productos</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Selector de Cantidad */}
-                        <div className="mb-8">
-                            <div className="flex items-center gap-3 mb-4">
-                                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                                </svg>
-                                <h3 className="text-lg font-semibold text-gray-700">Cantidad</h3>
-                            </div>
-                            
-                            <div className="flex items-center gap-4 bg-gray-50 rounded-xl p-4 w-fit">
-                                <button
-                                    onClick={() => setCantidad(Math.max(1, cantidad - 1))}
-                                    className="w-10 h-10 bg-red-500 hover:bg-red-600 text-white rounded-full font-bold text-lg flex items-center justify-center transition-all duration-200 shadow-md hover:shadow-lg"
-                                >
-                                    −
-                                </button>
-
-                                <div className="bg-white border-2 border-gray-200 rounded-xl px-6 py-2 min-w-[80px] text-center">
-                                    <span className="text-2xl font-bold text-gray-800">{cantidad}</span>
-                                </div>
-
-                                <button
-                                    onClick={() => setCantidad(cantidad + 1)}
-                                    className="w-10 h-10 bg-green-500 hover:bg-green-600 text-white rounded-full font-bold text-lg flex items-center justify-center transition-all duration-200 shadow-md hover:shadow-lg"
-                                >
-                                    +
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Detalles del Producto Seleccionado */}
-                        {productoSeleccionado !== "" && (() => {
-                            const producto = productos.find(p => p.id === Number(productoSeleccionado));
-                            if (!producto) return null;
-
-                            return (
-                                <div className="mb-8 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-2xl p-6 border-2 border-indigo-100">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <h3 className="text-lg font-semibold text-gray-700">
-                                            Producto seleccionado
-                                        </h3>
-                                    </div>
-
-                                    <div className="flex items-start gap-6">
-                                        {producto.imagen ? (
-                                            <img
-                                                src={`${API_BASE_URL}/uploads/${producto.imagen}`}
-                                                alt={producto.nombre}
-                                                className="w-24 h-24 object-cover rounded-2xl border-2 border-white shadow-lg"
-                                            />
-                                        ) : (
-                                            <div className="w-24 h-24 bg-gradient-to-br from-gray-200 to-gray-300 rounded-2xl flex items-center justify-center border-2 border-white shadow-lg">
-                                                <svg className="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                                </svg>
-                                            </div>
-                                        )}
-                                        
-                                        <div className="flex-1">
-                                            <h4 className="text-xl font-bold text-gray-800 mb-2">
-                                                {producto.nombre}
-                                            </h4>
-                                            
-                                            <div className="bg-white rounded-lg p-3 shadow-sm">
-                                                <p className="text-sm text-gray-600 mb-1">Precio unitario</p>
-                                                <p className="text-2xl font-bold text-green-600">
-                                                    {producto.precio > 0 ? (
-                                                        `$${producto.precio}`
-                                                    ) : (
-                                                        <span className="text-red-500 text-lg">Sin precio definido</span>
-                                                    )}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-
-                        {/* Botón Agregar al Carrito */}
-                        <div className="mb-8">
-                            <button
-                                onClick={agregarAlCarrito}
-                                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl px-8 py-4 font-semibold text-lg transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-1 flex items-center justify-center gap-3"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 9M7 13l-1.5-9m0 0h2m13 0v6a2 2 0 01-2 2H9a2 2 0 01-2-2V6a2 2 0 012-2h2" />
-                                </svg>
-                                Agregar al carrito
-                            </button>
-                        </div>
-
-                        {/* Carrito de Compras */}
-                        {carrito.length > 0 && (
-                            <div className="mb-8">
-                                <div className="flex items-center gap-3 mb-6">
-                                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                                    </svg>
-                                    <h3 className="text-lg font-semibold text-gray-700">Carrito de compras</h3>
-                                    <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-sm font-medium">
-                                        {carrito.length} {carrito.length === 1 ? 'artículo' : 'artículos'}
-                                    </span>
-                                </div>
-                                
-                                <div className="space-y-4">
-                                    {carrito.map((item, i) => (
-                                        <div key={i} className="bg-white border-2 border-gray-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-4 flex-1">
-                                                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-md">
-                                                        {item.cantidad}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <h4 className="text-lg font-semibold text-gray-800 mb-1">{item.nombre}</h4>
-                                                        <div className="flex items-center gap-4 text-sm text-gray-600">
-                                                            <span>Unitario: <span className="font-semibold text-green-600">${(item.subtotal / item.cantidad).toFixed(2)}</span></span>
-                                                            <span>•</span>
-                                                            <span>Total: <span className="font-semibold text-green-600">${item.subtotal.toFixed(2)}</span></span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="flex items-center gap-3">
-                                                    <input
-                                                        type="number"
-                                                        min={1}
-                                                        value={item.cantidad}
-                                                        onChange={(e) => actualizarCantidad(i, Number(e.target.value))}
-                                                        className="w-16 border-2 border-gray-200 rounded-lg px-2 py-1 text-center font-medium focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                                                        title="Modificar cantidad"
-                                                    />
-                                                    <button
-                                                        onClick={() => eliminarItem(i)}
-                                                        className="w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-lg flex items-center justify-center transition-colors duration-200"
-                                                        title="Eliminar del carrito"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Resumen de Totales */}
-                        {carrito.length > 0 && (
-                            <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border-2 border-green-100 mb-8">
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-3">
-                                        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                                        </svg>
-                                        <div>
-                                            <h3 className="text-xl font-bold text-gray-800">Total de la venta</h3>
-                                            <p className="text-green-600 font-semibold">Ganancia estimada: ${ganancia.toFixed(2)}</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-3xl font-bold text-green-600">${total.toFixed(2)}</p>
-                                        <p className="text-sm text-gray-600">{carrito.length} {carrito.length === 1 ? 'producto' : 'productos'}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Botón Confirmar Venta */}
-                        <button
-                            onClick={() => setMostrarModal(true)}
-                            disabled={carrito.length === 0}
-                            className={`w-full py-4 rounded-2xl font-bold text-lg transition-all duration-300 shadow-lg flex items-center justify-center gap-3 ${
-                                carrito.length > 0 
-                                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white hover:shadow-xl transform hover:-translate-y-1' 
-                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            }`}
-                        >
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {carrito.length > 0 ? 'Confirmar venta' : 'Agrega productos al carrito'}
-                        </button>
-
-                        {/* Modal de Resumen de Venta */}
-                        <ModalResumenVenta
-                            mostrar={mostrarModal}
-                            carrito={carrito}
-                            total={total}
-                            efectivo={efectivo}
-                            setEfectivo={setEfectivo}
-                            onClose={() => setMostrarModal(false)}
-                            onConfirm={async () => {
-                                const ventaData: any = {
-                                    items: carrito,
-                                    total,
-                                    metodoPago,
-                                    efectivo,
-                                    debe
-                                };
-
-                                // Agregar evento_id solo si se seleccionó un evento
-                                if (eventoSeleccionado !== "") {
-                                    ventaData.evento_id = eventoSeleccionado;
-                                }
-
-                                const res = await fetch(`${API_BASE_URL}/api/ventas`, {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify(ventaData),
-                                });
-
-                                if (res.ok) {
-                                    setMensaje("✅ Venta registrada correctamente");
-                                    setCarrito([]);
-                                    setEfectivo(0);
-                                    // Mantener el evento seleccionado por defecto (el último agregado)
-                                    // Solo reseteamos si no hay eventos o si queremos cambiar el comportamiento
-                                    setMostrarModal(false);
-                                } else {
-                                    setMensaje("❌ Error al registrar la venta");
-                                }
-                            }}
-                            metodoPago={metodoPago}
-                            setMetodoPago={setMetodoPago}
-                            debe={debe}
-                            setDebe={setDebe}
-                        />
-                    </div>
-                </div>
-            </div>
+  const cambiarCantidad = (p: Producto, cantidad: number) => {
+    if (
+      enviando.current ||
+      !Number.isInteger(cantidad) ||
+      cantidad < 0 ||
+      cantidad > p.stock ||
+      p.precio <= 0
+    )
+      return;
+    setCarrito((prev) => {
+      const otros = prev.filter((i) => i.producto_id !== p.id);
+      if (!cantidad) return otros;
+      const item = {
+        producto_id: p.id,
+        nombre: p.nombre,
+        cantidad,
+        subtotal: p.precio * cantidad,
+        ganancia: (p.precio - p.costo) * cantidad,
+      };
+      return prev.some((i) => i.producto_id === p.id)
+        ? prev.map((i) => (i.producto_id === p.id ? item : i))
+        : [...prev, item];
+    });
+    setMensaje("");
+  };
+  const total = carrito.reduce((s, i) => s + i.subtotal, 0);
+  const unidades = carrito.reduce((s, i) => s + i.cantidad, 0);
+  const categorias = [
+    "Todos",
+    ...new Set(
+      productos.map((p) => p.categoria?.trim()).filter((c): c is string => !!c),
+    ),
+  ];
+  const filtrados = productos.filter(
+    (p) =>
+      normalizar(p.nombre).includes(normalizar(busqueda)) &&
+      (categoria === "Todos" || p.categoria?.trim() === categoria),
+  );
+  const confirmar = async () => {
+    if (
+      enviando.current ||
+      !carrito.length ||
+      cargando ||
+      error ||
+      cargandoEventos ||
+      errorEventos
+    )
+      return;
+    enviando.current = true;
+    setGuardando(true);
+    setErrorVenta("");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 30000);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ventas`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: carrito,
+          total,
+          metodoPago,
+          efectivo: metodoPago === "efectivo" ? efectivo : 0,
+          debe,
+          ...(eventoSeleccionado !== ""
+            ? { evento_id: eventoSeleccionado }
+            : {}),
+        }),
+      });
+      if (!res.ok) {
+        setErrorVenta(
+          "No se pudo registrar la venta. Revisá la disponibilidad antes de volver a confirmar.",
+        );
+        return;
+      }
+      setProductos((prev) =>
+        prev.map((p) => ({
+          ...p,
+          stock: Math.max(
+            0,
+            p.stock -
+              (carrito.find((i) => i.producto_id === p.id)?.cantidad ?? 0),
+          ),
+        })),
+      );
+      setCarrito([]);
+      setEfectivo(0);
+      setDebe(false);
+      setMetodoPago("efectivo");
+      setBusqueda("");
+      setMensaje(
+        "Venta registrada correctamente. Ya podés cargar la siguiente.",
+      );
+      void cargarProductos();
+    } catch {
+      setErrorVenta(
+        "Se interrumpió la conexión. Consultá el historial antes de repetir la venta para evitar duplicarla.",
+      );
+    } finally {
+      clearTimeout(timeout);
+      enviando.current = false;
+      setGuardando(false);
+    }
+  };
+  return (
+    <div className={`sales-page ${unidades ? "has-active-sale" : ""}`}>
+      <section className="sales-heading">
+        <div>
+          <h1>Registrar venta</h1>
+          <p>Buscá productos, cargá las cantidades y confirmá el cobro.</p>
         </div>
-    );
+      </section>
+      <section className="sale-context" aria-label="Evento de esta venta">
+        {" "}
+        <label className="field-label" htmlFor="evento">
+          Evento de la venta
+        </label>
+        <select
+          id="evento"
+          value={eventoSeleccionado}
+          disabled={guardando || cargandoEventos}
+          onChange={(e) =>
+            setEventoSeleccionado(e.target.value ? Number(e.target.value) : "")
+          }
+        >
+          <option value="">
+            {cargandoEventos ? "Cargando eventos…" : "Venta general"}
+          </option>
+          {eventos.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.nombre}
+            </option>
+          ))}
+        </select>
+        {errorEventos && (
+          <div className="notice" role="alert">
+            No se cargaron los eventos.{" "}
+            <button
+              className="text-button"
+              onClick={() => setIntentoEventos((i) => i + 1)}
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+      </section>
+      {(mensaje || errorVenta) && (
+        <div
+          className={`sale-feedback notice ${errorVenta ? "error" : "success"}`}
+          role={errorVenta ? "alert" : "status"}
+        >
+          <div>
+            <strong>
+              {errorVenta ? "La venta necesita revisión" : "Venta registrada"}
+            </strong>
+            <p>{errorVenta || mensaje}</p>
+            {errorVenta && (
+              <a href="/historial" target="_blank" rel="noreferrer">
+                Consultar historial (otra pestaña)
+              </a>
+            )}
+          </div>
+          <button
+            aria-label="Cerrar aviso"
+            onClick={() => {
+              setMensaje("");
+              setErrorVenta("");
+            }}
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
+      <div className="shop-layout">
+        <section
+          aria-labelledby="catalogo-title"
+          className="catalog"
+          aria-busy={cargando}
+        >
+          <div className="section-title">
+            <div>
+              <h2 id="catalogo-title">Productos</h2>
+            </div>
+            <span className="muted">
+              {cargando ? "Consultando…" : `${productos.length} productos`}
+            </span>
+          </div>
+          <label className="search-box">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            >
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="m16 16 5 5" />
+            </svg>
+            <input
+              ref={busquedaRef}
+              type="search"
+              aria-label="Buscar productos"
+              placeholder="Buscar por nombre de producto…"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+            />
+            {busqueda && (
+              <button
+                className="clear-search"
+                aria-label="Borrar búsqueda"
+                onClick={() => {
+                  setBusqueda("");
+                  busquedaRef.current?.focus();
+                }}
+              >
+                Borrar
+              </button>
+            )}
+          </label>
+          <label className="mobile-category">
+            Categoría
+            <select
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+            >
+              {categorias.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+          <div className="category-list" aria-label="Categorías">
+            {categorias.map((c) => (
+              <button
+                key={c}
+                aria-pressed={categoria === c}
+                onClick={() => setCategoria(c)}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+          {cargando && productos.length > 0 && (
+            <p className="stock-update" role="status">
+              Actualizando disponibilidad…
+            </p>
+          )}
+          {error && productos.length > 0 && (
+            <div className="notice error" role="alert">
+              <p>{error} Verificá el stock antes de continuar.</p>
+              <button
+                className="secondary"
+                onClick={() => void cargarProductos()}
+              >
+                Volver a intentar
+              </button>
+            </div>
+          )}
+          {cargando && !productos.length ? (
+            <div className="empty-state" role="status">
+              <h3>Consultando productos</h3>
+              <p>
+                {demora
+                  ? "El servidor está tardando en responder. Seguimos intentando cargar los productos."
+                  : "Estamos verificando precios y disponibilidad."}
+              </p>
+            </div>
+          ) : error && !productos.length ? (
+            <div className="empty-state" role="alert">
+              <h3>No pudimos cargar los productos</h3>
+              <p>{error}</p>
+              <button
+                className="primary"
+                onClick={() => void cargarProductos()}
+              >
+                Volver a intentar
+              </button>
+            </div>
+          ) : !filtrados.length ? (
+            <div className="empty-state">
+              <h3>
+                {productos.length
+                  ? "No encontramos ese producto"
+                  : "No hay productos cargados"}
+              </h3>
+              <p>
+                {productos.length
+                  ? "Probá con otro nombre o categoría."
+                  : "Todavía no hay productos cargados."}
+              </p>
+              {productos.length > 0 && (
+                <button
+                  className="secondary"
+                  onClick={() => {
+                    setBusqueda("");
+                    setCategoria("Todos");
+                  }}
+                >
+                  Ver todos los productos
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="product-grid">
+              {filtrados.map((p, index) => {
+                const enCarrito =
+                  carrito.find((i) => i.producto_id === p.id)?.cantidad ?? 0;
+                return (
+                  <article
+                    key={p.id}
+                    className={`product-card ${enCarrito ? "in-sale" : ""}`}
+                    aria-label={p.nombre}
+                  >
+                    <Foto
+                      key={`${p.id}-${p.imagen}`}
+                      producto={p}
+                      prioritaria={index < 4}
+                    />
+                    <div className="product-info">
+                      <p className="product-category">
+                        {p.categoria || "Comunicación IAM"}
+                      </p>
+                      <h3>{p.nombre}</h3>
+                      <p className="product-price">{moneda(p.precio)}</p>
+                      <p
+                        className={`availability ${p.stock <= 0 ? "unavailable" : ""}`}
+                      >
+                        {p.stock > 0
+                          ? `${p.stock} disponibles${enCarrito ? ` · ${enCarrito} en esta venta` : ""}`
+                          : "Sin stock por ahora"}
+                      </p>
+                      <button
+                        className="add-button"
+                        aria-label={`Agregar ${p.nombre}`}
+                        disabled={
+                          guardando ||
+                          cargando ||
+                          !!error ||
+                          p.stock <= enCarrito ||
+                          p.precio <= 0
+                        }
+                        onClick={() => cambiarCantidad(p, enCarrito + 1)}
+                      >
+                        <span>
+                          {p.stock <= 0
+                            ? "Sin stock"
+                            : p.precio <= 0
+                              ? "Precio no disponible"
+                              : enCarrito >= p.stock
+                                ? "Máximo agregado"
+                                : "Agregar"}
+                        </span>
+                        <svg
+                          aria-hidden="true"
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                        >
+                          <path d="M12 5v14M5 12h14" />
+                        </svg>
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+        <aside
+          ref={panelRef}
+          className="order-panel"
+          id="pedido"
+          aria-labelledby="pedido-title"
+        >
+          <div className="order-heading">
+            <div className="section-title">
+              <h2 id="pedido-title">Venta actual</h2>
+              <span className="count-badge">{unidades}</span>
+            </div>
+            <p className="muted">Revisá los productos antes de cobrar.</p>
+          </div>
+          <div
+            className="order-scroll"
+            tabIndex={0}
+            role="region"
+            aria-label="Productos y opciones de cobro"
+          >
+            {!carrito.length ? (
+              <div className="order-empty">
+                <h3>Agregá el primer producto</h3>
+                <p>Buscá un producto y tocá Agregar para comenzar.</p>
+              </div>
+            ) : (
+              <ul className="order-items">
+                {carrito.map((i) => (
+                  <li key={i.producto_id}>
+                    <div className="order-item-top">
+                      <h3>{i.nombre}</h3>
+                      <strong>{moneda(i.subtotal)}</strong>
+                    </div>
+                    <div className="order-item-bottom">
+                      <div className="quantity">
+                        <button
+                          aria-label={`Quitar una unidad de ${i.nombre}`}
+                          disabled={guardando || cargando || !!error}
+                          onClick={() => {
+                            const p = productos.find(
+                              (p) => p.id === i.producto_id,
+                            );
+                            if (p) cambiarCantidad(p, i.cantidad - 1);
+                          }}
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          min="1"
+                          max={
+                            productos.find((p) => p.id === i.producto_id)
+                              ?.stock ?? i.cantidad
+                          }
+                          aria-label={`Cantidad de ${i.nombre}`}
+                          value={i.cantidad}
+                          disabled={guardando || cargando || !!error}
+                          onChange={(e) => {
+                            const p = productos.find(
+                              (p) => p.id === i.producto_id,
+                            );
+                            if (p && Number(e.target.value) >= 1)
+                              cambiarCantidad(p, Number(e.target.value));
+                          }}
+                        />
+                        <button
+                          aria-label={`Agregar una unidad de ${i.nombre}`}
+                          disabled={
+                            guardando ||
+                            cargando ||
+                            !!error ||
+                            i.cantidad >=
+                              (productos.find((p) => p.id === i.producto_id)
+                                ?.stock ?? 0)
+                          }
+                          onClick={() => {
+                            const p = productos.find(
+                              (p) => p.id === i.producto_id,
+                            );
+                            if (p) cambiarCantidad(p, i.cantidad + 1);
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <button
+                        className="text-button"
+                        aria-label={`Quitar ${i.nombre} de la venta`}
+                        disabled={guardando}
+                        onClick={() =>
+                          setCarrito((prev) =>
+                            prev.filter((x) => x.producto_id !== i.producto_id),
+                          )
+                        }
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <fieldset className="payment-options" disabled={guardando}>
+              <legend>Vuelto y deuda</legend>
+              {metodoPago === "efectivo" && (
+                <>
+                  <label className="field-label" htmlFor="efectivo">
+                    Recibido{" "}
+                    <span className="muted">(opcional, para el vuelto)</span>
+                  </label>
+                  <input
+                    id="efectivo"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="$ 0"
+                    value={efectivo || ""}
+                    onChange={(e) =>
+                      setEfectivo(Math.max(0, Number(e.target.value)))
+                    }
+                  />
+                  {efectivo > 0 && (
+                    <p className="change-due">
+                      {efectivo >= total
+                        ? `Vuelto: ${moneda(efectivo - total)}`
+                        : `Faltan: ${moneda(total - efectivo)}`}
+                    </p>
+                  )}
+                </>
+              )}
+              <label className="debt-label">
+                <input
+                  type="checkbox"
+                  checked={debe}
+                  onChange={(e) => setDebe(e.target.checked)}
+                />
+                El cliente queda debiendo
+              </label>
+            </fieldset>
+            <p className="sale-profit">
+              Ganancia estimada:{" "}
+              {moneda(carrito.reduce((s, i) => s + i.ganancia, 0))}
+            </p>
+          </div>
+          <div className="order-footer">
+            <fieldset className="fixed-payment" disabled={guardando}>
+              <legend>Medio de pago</legend>
+              <div className="payment-toggle">
+                <button
+                  type="button"
+                  aria-pressed={metodoPago === "efectivo"}
+                  onClick={() => setMetodoPago("efectivo")}
+                >
+                  Efectivo
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={metodoPago === "transferencia"}
+                  onClick={() => setMetodoPago("transferencia")}
+                >
+                  Transferencia
+                </button>
+              </div>
+            </fieldset>
+            <div className="order-total">
+              <span>Total</span>
+              <strong>{moneda(total)}</strong>
+            </div>
+            <button
+              className="primary checkout"
+              disabled={
+                !carrito.length ||
+                guardando ||
+                cargando ||
+                !!error ||
+                cargandoEventos ||
+                errorEventos
+              }
+              onClick={() => void confirmar()}
+            >
+              {guardando ? "Registrando…" : "Registrar venta"}{" "}
+              <svg
+                aria-hidden="true"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="m5 12 4 4L19 6" />
+              </svg>
+            </button>
+            <p className="checkout-note">
+              Se registra con {metodoPago}
+              {debe ? " · Pago pendiente" : ""}.
+            </p>
+          </div>
+        </aside>
+      </div>
+      {unidades > 0 && (
+        <div className="mobile-order">
+          <label className="mobile-payment">
+            Cobro
+            <select
+              aria-label="Medio de pago móvil"
+              disabled={guardando}
+              value={metodoPago}
+              onChange={(e) =>
+                setMetodoPago(e.target.value as "efectivo" | "transferencia")
+              }
+            >
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+            </select>
+            {debe && <span>Pago pendiente</span>}
+          </label>
+          <a href="#pedido">
+            {unidades} {unidades === 1 ? "unidad" : "unidades"} ·{" "}
+            {moneda(total)}
+            <small>Ver detalle · {metodoPago}</small>
+          </a>
+          <button
+            disabled={
+              guardando ||
+              cargando ||
+              !!error ||
+              cargandoEventos ||
+              errorEventos
+            }
+            onClick={() => void confirmar()}
+          >
+            {guardando ? "Registrando…" : "Registrar venta"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
