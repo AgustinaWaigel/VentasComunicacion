@@ -1,12 +1,22 @@
 ﻿import { useEffect, useRef, useState } from "react";
-import { PageHeader, Feedback, money } from "../components/AdminUI";
+import {
+  PageHeader,
+  Feedback,
+  FieldError,
+  money,
+} from "../components/AdminUI";
+import {
+  validarImagen,
+  validarProducto,
+  type Errores,
+} from "../utils/validar";
 import { errorMessage, requestJson } from "../hooks/useApiList";
 export default function AgregarProducto() {
   const [nombre, setNombre] = useState(""),
     [categoria, setCategoria] = useState("");
   const [precio, setPrecio] = useState(""),
-    [costo, setCosto] = useState(""),
-    [stock, setStock] = useState("");
+    [costo, setCosto] = useState("");
+  const [errores, setErrores] = useState<Errores>({});
   const [imagen, setImagen] = useState<File | null>(null),
     [preview, setPreview] = useState("");
   const [mensaje, setMensaje] = useState(""),
@@ -33,22 +43,17 @@ export default function AgregarProducto() {
     setCategoria("");
     setPrecio("");
     setCosto("");
-    setStock("");
+    setErrores({});
     clearImage();
   };
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy.current) return;
-    if (
-      !nombre.trim() ||
-      !Number.isFinite(Number(precio)) ||
-      Number(precio) < 0 ||
-      !Number.isFinite(Number(costo)) ||
-      Number(costo) < 0 ||
-      !Number.isInteger(Number(stock)) ||
-      Number(stock) < 0
-    ) {
-      setError("Completá los datos con precios válidos y un stock entero.");
+    const encontrados = validarProducto({ nombre, categoria, precio, costo });
+    setErrores(encontrados);
+    if (Object.keys(encontrados).length) {
+      setMensaje("");
+      setError("Revisá los campos marcados antes de guardar.");
       return;
     }
     busy.current = true;
@@ -61,7 +66,6 @@ export default function AgregarProducto() {
       categoria: categoria.trim(),
       precio,
       costo,
-      stock,
     }).forEach(([key, value]) => body.append(key, value));
     if (imagen) body.append("imagen", imagen);
     try {
@@ -84,13 +88,13 @@ export default function AgregarProducto() {
       />
       <Feedback message={mensaje} />
       <Feedback message={error} error />
-      <form onSubmit={submit} className="product-form surface">
+      <form onSubmit={submit} className="product-form surface" noValidate>
         <fieldset disabled={saving}>
           <div className="form-columns">
             <section className="form-section">
               <h2>Datos del producto</h2>
               <p className="section-help">
-                Nombre, precio, costo y stock son obligatorios.
+                Nombre, precio y costo son obligatorios.
               </p>
               <label>
                 Nombre del producto
@@ -101,7 +105,10 @@ export default function AgregarProducto() {
                   onChange={(e) => setNombre(e.target.value)}
                   placeholder="Por ejemplo, Llavero IAM"
                   autoComplete="off"
+                  maxLength={80}
+                  aria-invalid={!!errores.nombre}
                 />
+                <FieldError message={errores.nombre} />
               </label>
               <label>
                 Categoría <span className="optional">(opcional)</span>
@@ -110,7 +117,10 @@ export default function AgregarProducto() {
                   onChange={(e) => setCategoria(e.target.value)}
                   list="categorias"
                   placeholder="Elegí o escribí una categoría"
+                  maxLength={40}
+                  aria-invalid={!!errores.categoria}
                 />
+                <FieldError message={errores.categoria} />
                 <datalist id="categorias">
                   {[
                     "Stickers",
@@ -135,7 +145,9 @@ export default function AgregarProducto() {
                     value={precio}
                     onChange={(e) => setPrecio(e.target.value)}
                     placeholder="0,00"
+                    aria-invalid={!!errores.precio}
                   />
+                  <FieldError message={errores.precio} />
                 </label>
                 <label>
                   Costo ($)
@@ -148,22 +160,11 @@ export default function AgregarProducto() {
                     value={costo}
                     onChange={(e) => setCosto(e.target.value)}
                     placeholder="0,00"
+                    aria-invalid={!!errores.costo}
                   />
+                  <FieldError message={errores.costo} />
                 </label>
               </div>
-              <label>
-                Stock inicial
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="0"
-                  step="1"
-                  required
-                  value={stock}
-                  onChange={(e) => setStock(e.target.value)}
-                  placeholder="Cantidad de unidades"
-                />
-              </label>
               {(precio || costo) && (
                 <div className="calculation">
                   <span>Ganancia por unidad</span>
@@ -203,18 +204,16 @@ export default function AgregarProducto() {
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    if (
-                      !file.type.startsWith("image/") ||
-                      file.size > 5 * 1024 * 1024
-                    ) {
-                      setError("Elegí una imagen de hasta 5 MB.");
+                    const problema = validarImagen(file);
+                    setErrores((prev) => ({ ...prev, imagen: problema }));
+                    if (problema) {
                       e.target.value = "";
                       return;
                     }
-                    setError("");
                     setImagen(file);
                   }}
                 />
+                <FieldError message={errores.imagen} />
               </label>
               <p className="section-help">
                 JPG, PNG u otro formato de imagen. Máximo 5 MB.

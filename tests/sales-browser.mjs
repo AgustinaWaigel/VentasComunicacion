@@ -129,10 +129,10 @@ try {
   await page
     .getByLabel("Cantidad de Mate y bombilla", { exact: true })
     .fill("3");
-  assert.equal(await mate.getByRole("button").isDisabled(), true);
+  // Sin control de stock: la cantidad solo se limita a un entero razonable.
   await page
     .getByLabel("Cantidad de Mate y bombilla", { exact: true })
-    .fill("4");
+    .fill("1000");
   assert.equal(
     await page
       .getByLabel("Cantidad de Mate y bombilla", { exact: true })
@@ -154,7 +154,7 @@ try {
   assert.equal(posts[1].metodoPago, "transferencia");
   assert.equal(posts[1].debe, true);
   results.push({
-    test: "merged quantities / stock limit / change / transfer / debt",
+    test: "merged quantities / quantity cap / change / transfer / debt",
     pass: true,
   });
   saleError = true;
@@ -187,10 +187,10 @@ try {
   await mate
     .getByRole("button", { name: "Agregar Mate y bombilla", exact: true })
     .click();
-  assert.equal(await page.locator(".mobile-order button").isVisible(), true);
+  assert.equal(await page.locator(".mobile-order .primary").isVisible(), true);
   saleError = false;
   const before = posts.length;
-  await page.locator(".mobile-order button").click();
+  await page.locator(".mobile-order .primary").click();
   await page
     .getByRole("status")
     .filter({ hasText: "Venta registrada correctamente" })

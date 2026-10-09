@@ -46,54 +46,103 @@ router.get('/', async (_req: Request, res: Response) => {
   }
 });
 
+const METODOS_PAGO = ['efectivo', 'transferencia'];
+const MAX_UNIDADES = 999;
+const VIGENCIA_CLAVE = 15 * 60 * 1000;
+
+type Respuesta = { status: number; body: unknown };
+const rechazo = (error: string): Respuesta => ({ status: 400, body: { error } });
+
+// Ventas ya creadas, por la clave que manda el navegador: si la conexión se
+// corta y se reintenta, se devuelve la misma venta en vez de cargarla otra vez.
+const recientes = new Map<string, { creada: number; resultado: Promise<Respuesta> }>();
+
+async function registrarVenta(body: any): Promise<Respuesta> {
+  const { items, metodoPago, efectivo, debe, evento_id } = body ?? {};
+  if (!Array.isArray(items) || !items.length) return rechazo('La venta no tiene productos');
+  if (items.length > 200) return rechazo('La venta tiene demasiados productos');
+
+  const cantidades = new Map<number, number>();
+  for (const item of items) {
+    const id = Number(item?.producto_id);
+    const cantidad = Number(item?.cantidad);
+    if (!Number.isInteger(id) || id <= 0) return rechazo('Hay un producto inválido en la venta');
+    if (!Number.isInteger(cantidad) || cantidad < 1) return rechazo('Las cantidades deben ser números enteros mayores a cero');
+    cantidades.set(id, (cantidades.get(id) ?? 0) + cantidad);
+  }
+  for (const cantidad of cantidades.values()) {
+    if (cantidad > MAX_UNIDADES) return rechazo(`No se pueden cargar más de ${MAX_UNIDADES} unidades de un producto`);
+  }
+
+  const metodo = metodoPago ?? 'efectivo';
+  if (!METODOS_PAGO.includes(metodo)) return rechazo('El medio de pago no es válido');
+  const recibido = efectivo == null || efectivo === '' ? 0 : Number(efectivo);
+  if (!Number.isFinite(recibido) || recibido < 0) return rechazo('El monto recibido no es válido');
+  if (debe != null && typeof debe !== 'boolean') return rechazo('El estado de deuda no es válido');
+
+  let eventoId: number | null = null;
+  if (evento_id != null && evento_id !== '') {
+    eventoId = Number(evento_id);
+    if (!Number.isInteger(eventoId) || eventoId <= 0) return rechazo('El evento no es válido');
+    const evento = await prisma.evento.findUnique({ where: { id: eventoId } });
+    if (!evento) return rechazo('El evento elegido ya no existe');
+  }
+
+  const productos = await prisma.producto.findMany({ where: { id: { in: [...cantidades.keys()] } } });
+  if (productos.length !== cantidades.size) return rechazo('Uno de los productos ya no existe. Actualizá la página');
+  const sinPrecio = productos.find((p) => !(p.precio > 0));
+  if (sinPrecio) return rechazo(`${sinPrecio.nombre} no tiene precio cargado`);
+
+  // Los importes se calculan acá con el precio guardado, no con lo que manda el navegador.
+  const detalles = productos.map((p) => {
+    const cantidad = cantidades.get(p.id) ?? 0;
+    return {
+      productoId: p.id,
+      cantidad,
+      subtotal: p.precio * cantidad,
+      ganancia: (p.precio - p.costo) * cantidad,
+    };
+  });
+
+  const venta = await prisma.venta.create({
+    data: {
+      total: detalles.reduce((s, d) => s + d.subtotal, 0),
+      ganancia: detalles.reduce((s, d) => s + d.ganancia, 0),
+      metodoPago: metodo,
+      efectivo: metodo === 'efectivo' ? recibido : 0,
+      debe: debe ?? false,
+      eventoId,
+      detalles: { create: detalles },
+    },
+  });
+
+  return { status: 201, body: { ok: true, ventaId: venta.id } };
+}
+
 // POST /api/ventas
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { items, metodoPago, efectivo, debe, evento_id } = req.body;
-    if (!items || !Array.isArray(items)) { res.status(400).json({ error: 'items debe ser un arreglo' }); return; }
-
-    let total = 0;
-    let gananciaTotal = 0;
-
-    for (const item of items) {
-      const prod = await prisma.producto.findUnique({ where: { id: item.producto_id } });
-      if (!prod) { res.status(400).send(`Producto ID ${item.producto_id} no encontrado`); return; }
-      if (item.cantidad > prod.stock) { res.status(400).send(`Stock insuficiente para ${prod.nombre}`); return; }
-      total += item.subtotal;
-      gananciaTotal += item.ganancia;
+    const clave = typeof req.body?.clave === 'string' && req.body.clave.length <= 80 ? req.body.clave : '';
+    const ahora = Date.now();
+    for (const [k, v] of recientes) {
+      if (ahora - v.creada > VIGENCIA_CLAVE) recientes.delete(k);
     }
 
-    const nuevaVenta = await prisma.$transaction(async (tx) => {
-      const venta = await tx.venta.create({
-        data: {
-          total,
-          ganancia: gananciaTotal,
-          metodoPago: metodoPago ?? 'efectivo',
-          efectivo: efectivo ? Number(efectivo) : 0,
-          debe: debe ?? false,
-          eventoId: evento_id ? Number(evento_id) : null,
-          detalles: {
-            create: items.map((item: any) => ({
-              productoId: item.producto_id,
-              cantidad: item.cantidad,
-              subtotal: item.subtotal,
-              ganancia: item.ganancia,
-            })),
-          },
-        },
-      });
-
-      for (const item of items) {
-        await tx.producto.update({
-          where: { id: item.producto_id },
-          data: { stock: { decrement: item.cantidad } },
-        });
+    let entrada = clave ? recientes.get(clave) : undefined;
+    if (!entrada) {
+      entrada = { creada: ahora, resultado: registrarVenta(req.body) };
+      if (clave) {
+        recientes.set(clave, entrada);
+        // Solo se recuerdan las ventas creadas: un rechazo se puede corregir y reenviar.
+        entrada.resultado.then(
+          (r) => { if (r.status !== 201) recientes.delete(clave); },
+          () => { recientes.delete(clave); },
+        );
       }
+    }
 
-      return venta;
-    });
-
-    res.status(201).json({ ok: true, ventaId: nuevaVenta.id });
+    const { status, body } = await entrada.resultado;
+    res.status(status).json(body);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al registrar la venta' });
@@ -106,21 +155,10 @@ router.delete('/:id', async (req: Request, res: Response) => {
     const id = Number(req.params.id);
     if (isNaN(id)) { res.status(400).json({ error: 'ID invalido' }); return; }
 
-    const venta = await prisma.venta.findUnique({
-      where: { id },
-      include: { detalles: true },
-    });
+    const venta = await prisma.venta.findUnique({ where: { id } });
     if (!venta) { res.status(404).json({ error: 'Venta no encontrada' }); return; }
 
-    await prisma.$transaction(async (tx) => {
-      for (const det of venta.detalles) {
-        await tx.producto.update({
-          where: { id: det.productoId },
-          data: { stock: { increment: det.cantidad } },
-        });
-      }
-      await tx.venta.delete({ where: { id } });
-    });
+    await prisma.venta.delete({ where: { id } });
 
     res.json({ mensaje: 'Venta eliminada correctamente' });
   } catch (error) {
@@ -136,6 +174,9 @@ router.put('/:id', async (req: Request, res: Response) => {
     if (isNaN(id)) { res.status(400).json({ error: 'ID invalido' }); return; }
 
     const { metodoPago, efectivo, debe } = req.body;
+    if (metodoPago !== undefined && !METODOS_PAGO.includes(metodoPago)) { res.status(400).json({ error: 'El medio de pago no es válido' }); return; }
+    if (efectivo !== undefined && (!Number.isFinite(Number(efectivo)) || Number(efectivo) < 0)) { res.status(400).json({ error: 'El monto recibido no es válido' }); return; }
+    if (debe !== undefined && typeof debe !== 'boolean') { res.status(400).json({ error: 'El estado de deuda no es válido' }); return; }
     const actualizada = await prisma.venta.update({
       where: { id },
       data: {

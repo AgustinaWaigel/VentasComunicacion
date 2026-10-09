@@ -6,12 +6,14 @@ const AgregarProducto = lazy(() => import("./pages/AgregarProducto"));
 const VerVentas = lazy(() => import("./pages/VerVentas"));
 const EditarProductos = lazy(() => import("./pages/EditarProductos"));
 const Eventos = lazy(() => import("./pages/Eventos"));
+const Catalogo = lazy(() => import("./pages/Catalogo"));
 
 export default function App() {
   return (
     <Layout>
       <Suspense fallback={<p role="status">Cargando sección…</p>}><Routes>
         <Route path="/" element={<AgregarVentas />} />
+        <Route path="/catalogo" element={<Catalogo />} />
         <Route path="/productos" element={<AgregarProducto />} />
         <Route path="/historial" element={<VerVentas />} />
         <Route path="/editar-productos" element={<EditarProductos />} />

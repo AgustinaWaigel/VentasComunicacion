@@ -188,7 +188,10 @@ try {
     await page.goto("http://127.0.0.1:3000" + route);
     await page.locator("h1").waitFor();
     if (route != "/productos")
-      await page.locator(".record-list article").first().waitFor();
+      await page
+        .locator(".record-list article, .inventory-record")
+        .first()
+        .waitFor();
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       assert.equal(
@@ -212,7 +215,6 @@ try {
     .fill("Producto nuevo");
   await page.getByLabel("Precio de venta ($)", { exact: true }).fill("2500");
   await page.getByLabel("Costo ($)", { exact: true }).fill("1000");
-  await page.getByLabel("Stock inicial", { exact: true }).fill("10");
   await page
     .getByRole("button", { name: "Guardar producto", exact: true })
     .click();
@@ -222,10 +224,9 @@ try {
     .waitFor();
   results.push({ test: "create product", pass: true });
   await page.goto("http://127.0.0.1:3000/editar-productos");
-  const inventory = page.getByRole("article", {
-    name: "Producto 01",
-    exact: true,
-  });
+  const inventory = page
+    .locator(".inventory-record")
+    .filter({ hasText: "Producto 01" });
   await inventory.getByRole("button", { name: "Editar producto" }).click();
   await inventory
     .getByLabel("Precio de venta ($)", { exact: true })
@@ -283,6 +284,7 @@ try {
     exact: true,
   });
   await edited.getByRole("button", { name: "Desactivar", exact: true }).click();
+  await page.getByRole("button", { name: "Desactivar evento" }).click();
   await page
     .getByRole("status")
     .filter({ hasText: "Evento desactivado" })
@@ -294,8 +296,8 @@ try {
     pass: true,
   });
   await page.goto("http://127.0.0.1:3000/historial");
-  await page.getByRole("article", { name: "Venta 70", exact: true }).waitFor();
-  const sale = page.getByRole("article", { name: "Venta 70", exact: true });
+  const sale = page.locator(".sale-record").filter({ hasText: "#70" });
+  await sale.waitFor();
   await sale.getByRole("button", { name: "Editar cobro" }).click();
   await sale
     .getByLabel("Medio de pago", { exact: true })
@@ -318,15 +320,18 @@ try {
     .getByRole("button", { name: "Eliminar seleccionadas (2)" })
     .click();
   await page
+    .getByRole("button", { name: "Eliminar 2 ventas", exact: true })
+    .click();
+  await page
     .getByRole("alert")
     .filter({ hasText: "Las restantes siguen en el historial" })
     .waitFor();
   assert.equal(
-    await page.getByRole("article", { name: "Venta 70", exact: true }).count(),
+    await page.locator(".sale-record").filter({ hasText: "#70" }).count(),
     0,
   );
   assert.equal(
-    await page.getByRole("article", { name: "Venta 71", exact: true }).count(),
+    await page.locator(".sale-record").filter({ hasText: "#71" }).count(),
     1,
   );
   results.push({
@@ -342,7 +347,7 @@ try {
   await page
     .getByRole("button", { name: "Volver a intentar", exact: true })
     .click();
-  await page.locator(".record-list article").first().waitFor();
+  await page.locator(".inventory-record").first().waitFor();
   results.push({ test: "load error / retry", pass: true });
   assert.deepEqual(errors, []);
   fs.writeFileSync(

@@ -5,17 +5,23 @@ import {
   Feedback,
   ListState,
   ProductThumb,
+  FieldError,
   money,
   searchText,
 } from "../components/AdminUI";
 import { useApiList, requestJson, errorMessage } from "../hooks/useApiList";
+import { useConfirm } from "../hooks/useConfirm";
+import {
+  validarImagen,
+  validarProducto,
+  type Errores,
+} from "../utils/validar";
 interface Producto {
   id: number;
   nombre: string;
   categoria?: string;
   precio: number;
   costo: number;
-  stock: number;
   imagen?: string;
 }
 export default function EditarProductos() {
@@ -33,23 +39,31 @@ export default function EditarProductos() {
   const [mensaje, setMensaje] = useState(""),
     [saveError, setSaveError] = useState(""),
     [saving, setSaving] = useState(false);
+  const [errores, setErrores] = useState<Errores>({});
   const busy = useRef(false);
-  const filtered = productos.filter(
-    (p) =>
-      searchText(p.nombre).includes(searchText(busqueda)) &&
-      (!categoria || p.categoria === categoria),
-  );
+  const { confirmar, dialogo } = useConfirm();
+  const filtered = productos
+    .filter(
+      (p) =>
+        searchText(p.nombre).includes(searchText(busqueda)) &&
+        (!categoria || p.categoria === categoria),
+    )
+    .sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, "es", {
+        sensitivity: "base",
+        numeric: true,
+      }),
+    );
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draft || busy.current) return;
-    if (
-      !draft.nombre.trim() ||
-      draft.precio < 0 ||
-      draft.costo < 0 ||
-      draft.stock < 0 ||
-      !Number.isInteger(draft.stock)
-    ) {
-      setSaveError("Revisá el nombre, los precios y el stock.");
+    const encontrados = validarProducto(
+      draft,
+      productos.filter((p) => p.id !== draft.id).map((p) => p.nombre),
+    );
+    setErrores((prev) => ({ imagen: prev.imagen, ...encontrados }));
+    if (Object.keys(encontrados).length) {
+      setSaveError("Revisá los campos marcados antes de guardar.");
       return;
     }
     busy.current = true;
@@ -58,11 +72,10 @@ export default function EditarProductos() {
     setMensaje("");
     const body = new FormData();
     Object.entries({
-      nombre: draft.nombre,
-      categoria: draft.categoria || "",
+      nombre: draft.nombre.trim(),
+      categoria: (draft.categoria || "").trim(),
       precio: String(draft.precio),
       costo: String(draft.costo),
-      stock: String(draft.stock),
     }).forEach(([k, v]) => body.append(k, v));
     if (image) body.append("imagen", image);
     try {
@@ -84,7 +97,14 @@ export default function EditarProductos() {
   const remove = async (p: Producto) => {
     if (
       busy.current ||
-      !confirm(`¿Eliminar “${p.nombre}”? Esta acción no se puede deshacer.`)
+      !(await confirmar({
+        titulo: `¿Eliminar “${p.nombre}”?`,
+        texto:
+          "Deja de aparecer para vender y en el catálogo. No se puede deshacer.",
+        accion: "Eliminar producto",
+        peligro: true,
+      })) ||
+      busy.current
     )
       return;
     busy.current = true;
@@ -106,7 +126,7 @@ export default function EditarProductos() {
     <div className="management-page">
       <PageHeader
         title="Productos"
-        description="Revisá precios y disponibilidad. Editá los datos sin perder de vista el producto."
+        description="Corregí nombres, precios y fotos. Los cambios se ven al instante al vender."
       >
         <Link className="primary" to="/productos">
           Agregar producto
@@ -168,61 +188,116 @@ export default function EditarProductos() {
           </button>
         )}
       </ListState>
-      {!loading && !error && (
-        <div className="record-list">
-          {filtered.map((p) => (
-            <article
-              className="surface inventory-record"
-              key={p.id}
-              aria-label={p.nombre}
-            >
-              <div className="record-heading">
-                <ProductThumb key={p.imagen} image={p.imagen} name={p.nombre} />
-                <div className="record-title">
-                  <h2>{p.nombre}</h2>
-                  <p>{p.categoria || "Sin categoría"}</p>
-                </div>
-                <span className={`state-tag ${p.stock > 0 ? "" : "neutral"}`}>
-                  {p.stock > 0 ? `${p.stock} disponibles` : "Sin stock"}
-                </span>
-              </div>
-              {draft?.id === p.id ? (
-                <form onSubmit={save}>
+      {!loading && !error && filtered.length > 0 && (
+        <div className="surface table-surface">
+          <table className="inventory-table">
+            <thead>
+              <tr>
+                <th className="col-photo">
+                  <span className="sr-only">Foto</span>
+                </th>
+                <th>Producto</th>
+                <th className="col-category">Categoría</th>
+                <th className="col-number">Precio</th>
+                <th className="col-number col-cost">Costo</th>
+                <th className="col-number col-profit">Ganancia</th>
+                <th className="col-actions">
+                  <span className="sr-only">Acciones</span>
+                </th>
+              </tr>
+            </thead>
+            {filtered.map((p) => (
+              <tbody
+                key={p.id}
+                className={`inventory-record ${draft?.id === p.id ? "is-editing" : ""}`}
+              >
+                <tr>
+                  <td className="col-photo">
+                    <ProductThumb
+                      key={p.imagen}
+                      image={p.imagen}
+                      name={p.nombre}
+                    />
+                  </td>
+                  <th scope="row" className="inventory-name">
+                    {p.nombre}
+                  </th>
+                  <td className="col-category">{p.categoria || "—"}</td>
+                  <td className="col-number inventory-price">
+                    {money(p.precio)}
+                  </td>
+                  <td className="col-number col-cost">{money(p.costo)}</td>
+                  <td className="col-number col-profit">
+                    {money(p.precio - p.costo)}
+                  </td>
+                  <td className="col-actions">
+                    <button
+                      className="secondary"
+                      aria-label={`Editar producto ${p.nombre}`}
+                      disabled={saving || draft !== null}
+                      onClick={() => {
+                        setDraft({ ...p });
+                        setImage(null);
+                        setErrores({});
+                        setSaveError("");
+                        setMensaje("");
+                      }}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      className="danger-button"
+                      aria-label={`Eliminar ${p.nombre}`}
+                      disabled={saving || draft !== null}
+                      onClick={() => void remove(p)}
+                    >
+                      Eliminar
+                    </button>
+                  </td>
+                </tr>
+                {draft?.id === p.id && (
+                  <tr className="inventory-edit">
+                    <td colSpan={7}>
+                <form onSubmit={save} noValidate>
                   <fieldset disabled={saving} className="inline-edit">
                     <div className="form-grid">
                       <label>
                         Nombre
                         <input
                           required
+                          maxLength={80}
+                          aria-invalid={!!errores.nombre}
                           value={draft.nombre}
                           onChange={(e) =>
                             setDraft({ ...draft, nombre: e.target.value })
                           }
                         />
+                        <FieldError message={errores.nombre} />
                       </label>
                       <label>
                         Categoría
                         <input
+                          maxLength={40}
+                          aria-invalid={!!errores.categoria}
                           value={draft.categoria || ""}
                           onChange={(e) =>
                             setDraft({ ...draft, categoria: e.target.value })
                           }
                         />
+                        <FieldError message={errores.categoria} />
                       </label>
                     </div>
-                    <div className="form-grid three">
-                      {(["precio", "costo", "stock"] as const).map((key) => (
+                    <div className="form-grid">
+                      {(["precio", "costo"] as const).map((key) => (
                         <label key={key}>
-                          {key === "precio"
-                            ? "Precio de venta ($)"
-                            : key === "costo"
-                              ? "Costo ($)"
-                              : "Stock"}
+                          {key === "precio" ? "Precio de venta ($)" : "Costo ($)"}
                           <input
                             type="number"
+                            inputMode="decimal"
                             required
                             min="0"
-                            step={key === "stock" ? "1" : "0.01"}
+                            step="0.01"
+                            aria-invalid={!!errores[key]}
                             value={draft[key]}
                             onChange={(e) =>
                               setDraft({
@@ -231,6 +306,7 @@ export default function EditarProductos() {
                               })
                             }
                           />
+                          <FieldError message={errores[key]} />
                         </label>
                       ))}
                     </div>
@@ -241,18 +317,16 @@ export default function EditarProductos() {
                         accept="image/*"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (
-                            file &&
-                            (!file.type.startsWith("image/") ||
-                              file.size > 5 * 1024 * 1024)
-                          ) {
-                            setSaveError("Elegí una imagen de hasta 5 MB.");
+                          const problema = file ? validarImagen(file) : "";
+                          setErrores((prev) => ({ ...prev, imagen: problema }));
+                          if (problema) {
                             e.target.value = "";
                             return;
                           }
                           setImage(file || null);
                         }}
                       />
+                      <FieldError message={errores.imagen} />
                     </label>
                     <div className="record-actions">
                       <button className="primary" type="submit">
@@ -265,6 +339,7 @@ export default function EditarProductos() {
                           setDraft(null);
                           setImage(null);
                           setSaveError("");
+                          setErrores({});
                         }}
                       >
                         Cancelar
@@ -272,49 +347,15 @@ export default function EditarProductos() {
                     </div>
                   </fieldset>
                 </form>
-              ) : (
-                <>
-                  <dl className="record-facts">
-                    <div>
-                      <dt>Precio de venta</dt>
-                      <dd>{money(p.precio)}</dd>
-                    </div>
-                    <div>
-                      <dt>Costo</dt>
-                      <dd>{money(p.costo)}</dd>
-                    </div>
-                    <div>
-                      <dt>Ganancia por unidad</dt>
-                      <dd>{money(p.precio - p.costo)}</dd>
-                    </div>
-                  </dl>
-                  <div className="record-actions">
-                    <button
-                      className="secondary"
-                      disabled={saving || draft !== null}
-                      onClick={() => {
-                        setDraft({ ...p });
-                        setImage(null);
-                        setSaveError("");
-                        setMensaje("");
-                      }}
-                    >
-                      Editar producto
-                    </button>
-                    <button
-                      className="danger-button"
-                      disabled={saving || draft !== null}
-                      onClick={() => void remove(p)}
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                </>
-              )}
-            </article>
-          ))}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            ))}
+          </table>
         </div>
       )}
+      {dialogo}
     </div>
   );
 }

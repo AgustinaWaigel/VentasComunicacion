@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -22,7 +22,40 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('La imagen no es válida'));
+  },
+});
+
+// Devuelve un 400 legible cuando el archivo no es una imagen o pesa de más.
+const subirImagen = (req: Request, res: Response, next: NextFunction) => {
+  upload.single('imagen')(req, res, (err: unknown) => {
+    if (err) { res.status(400).json({ error: 'La foto debe ser una imagen de hasta 5 MB' }); return; }
+    next();
+  });
+};
+
+const descartarImagen = (req: Request) => {
+  if (req.file) fs.unlink(req.file.path, () => {});
+};
+
+// El stock no se usa por ahora: no se pide ni se modifica desde acá.
+function leerProducto(body: any): { error: string } | { nombre: string; categoria: string; precio: number; costo: number } {
+  const nombre = typeof body?.nombre === 'string' ? body.nombre.trim() : '';
+  const categoria = typeof body?.categoria === 'string' ? body.categoria.trim() : '';
+  const precio = Number(body?.precio);
+  const costo = Number(body?.costo);
+  if (!nombre) return { error: 'Ingresá el nombre del producto' };
+  if (nombre.length > 80) return { error: 'El nombre puede tener hasta 80 caracteres' };
+  if (categoria.length > 40) return { error: 'La categoría puede tener hasta 40 caracteres' };
+  if (body?.precio == null || body.precio === '' || !Number.isFinite(precio) || precio <= 0) return { error: 'El precio debe ser un número mayor a cero' };
+  if (body?.costo == null || body.costo === '' || !Number.isFinite(costo) || costo < 0) return { error: 'El costo debe ser un número igual o mayor a cero' };
+  return { nombre, categoria, precio, costo };
+}
 
 // GET /api/productos
 router.get('/', async (_req: Request, res: Response) => {
@@ -53,25 +86,13 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/productos (con imagen)
-router.post('/', upload.single('imagen'), async (req: Request, res: Response): Promise<void> => {
+router.post('/', subirImagen, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { nombre, categoria, precio, costo, stock } = req.body;
-    const imagen = req.file?.filename;
-
-    if (!nombre || precio == null || costo == null || stock == null) {
-      res.status(400).json({ error: 'Faltan campos requeridos' });
-      return;
-    }
+    const datos = leerProducto(req.body);
+    if ('error' in datos) { descartarImagen(req); res.status(400).json(datos); return; }
 
     const nuevo = await prisma.producto.create({
-      data: {
-        nombre,
-        categoria: categoria || '',
-        precio: Number(precio),
-        costo: Number(costo),
-        stock: Number(stock),
-        imagen: imagen || null,
-      },
+      data: { ...datos, imagen: req.file?.filename || null },
     });
 
     res.status(201).json(nuevo);
@@ -82,25 +103,19 @@ router.post('/', upload.single('imagen'), async (req: Request, res: Response): P
 });
 
 // PUT /api/productos/:id
-router.put('/:id', upload.single('imagen'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', subirImagen, async (req: Request, res: Response): Promise<void> => {
   try {
     const id = Number(req.params.id);
-    const { nombre, categoria, precio, costo, stock } = req.body;
-    const imagen = req.file?.filename;
+    const datos = leerProducto(req.body);
+    if (!Number.isInteger(id)) { descartarImagen(req); res.status(400).json({ error: 'ID inválido' }); return; }
+    if ('error' in datos) { descartarImagen(req); res.status(400).json(datos); return; }
 
     const existente = await prisma.producto.findUnique({ where: { id } });
-    if (!existente) { res.status(404).send('Producto no encontrado'); return; }
+    if (!existente) { descartarImagen(req); res.status(404).json({ error: 'Producto no encontrado' }); return; }
 
     const actualizado = await prisma.producto.update({
       where: { id },
-      data: {
-        nombre: nombre || existente.nombre,
-        categoria: categoria !== undefined ? categoria : existente.categoria,
-        precio: Number(precio),
-        costo: Number(costo),
-        stock: Number(stock),
-        imagen: imagen || existente.imagen,
-      },
+      data: { ...datos, imagen: req.file?.filename || existente.imagen },
     });
 
     res.json(actualizado);
@@ -114,6 +129,7 @@ router.put('/:id', upload.single('imagen'), async (req: Request, res: Response):
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
+    if (!Number.isInteger(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
     await prisma.producto.delete({ where: { id } });
     res.json({ ok: true });
   } catch (error) {

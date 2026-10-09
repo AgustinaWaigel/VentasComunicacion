@@ -3,6 +3,11 @@ import prisma from '../utils/prismaClient';
 
 const router = Router();
 
+const fechaValida = (fecha: unknown) =>
+  typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}/.test(fecha) && !Number.isNaN(new Date(fecha).getTime());
+const nombreValido = (nombre: unknown) =>
+  typeof nombre === 'string' && nombre.trim().length > 0 && nombre.trim().length <= 80;
+
 // Obtener todos los eventos
 router.get('/', async (_req: Request, res: Response) => {
   try {
@@ -17,10 +22,12 @@ router.get('/', async (_req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const { nombre, fecha, descripcion } = req.body;
-    if (!nombre || !fecha) { res.status(400).json({ error: 'Nombre y fecha son requeridos' }); return; }
+    if (!nombreValido(nombre)) { res.status(400).json({ error: 'Ingresá un nombre de hasta 80 caracteres' }); return; }
+    if (!fechaValida(fecha)) { res.status(400).json({ error: 'Ingresá una fecha válida' }); return; }
+    if (descripcion != null && (typeof descripcion !== 'string' || descripcion.length > 500)) { res.status(400).json({ error: 'La descripción puede tener hasta 500 caracteres' }); return; }
 
     const nuevo = await prisma.evento.create({
-      data: { nombre, fecha, descripcion: descripcion || '', activo: true },
+      data: { nombre: nombre.trim(), fecha, descripcion: descripcion || '', activo: true },
     });
 
     res.status(201).json(nuevo);
@@ -35,11 +42,16 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const { nombre, fecha, descripcion, activo } = req.body;
+    if (!Number.isInteger(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+    if (nombre !== undefined && !nombreValido(nombre)) { res.status(400).json({ error: 'Ingresá un nombre de hasta 80 caracteres' }); return; }
+    if (fecha !== undefined && !fechaValida(fecha)) { res.status(400).json({ error: 'Ingresá una fecha válida' }); return; }
+    if (descripcion != null && (typeof descripcion !== 'string' || descripcion.length > 500)) { res.status(400).json({ error: 'La descripción puede tener hasta 500 caracteres' }); return; }
+    if (activo !== undefined && typeof activo !== 'boolean') { res.status(400).json({ error: 'El estado del evento no es válido' }); return; }
 
     const actualizado = await prisma.evento.update({
       where: { id },
       data: {
-        ...(nombre !== undefined && { nombre }),
+        ...(nombre !== undefined && { nombre: nombre.trim() }),
         ...(fecha !== undefined && { fecha }),
         ...(descripcion !== undefined && { descripcion }),
         ...(activo !== undefined && { activo }),

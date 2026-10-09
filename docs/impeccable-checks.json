@@ -35,24 +35,20 @@
   {
     "contrast": [
       {
-        "selector": ".product-info h3",
-        "ratio": 11.44
+        "selector": ".product-name",
+        "ratio": 13.66
       },
       {
         "selector": ".product-price",
-        "ratio": 11.44
-      },
-      {
-        "selector": ".availability",
-        "ratio": 6.27
+        "ratio": 13.66
       },
       {
         "selector": ".product-category",
-        "ratio": 5.48
+        "ratio": 5.27
       },
       {
         "selector": ".search-box input",
-        "ratio": 5.48
+        "ratio": 6.08
       }
     ]
   }

@@ -31,6 +31,9 @@ export function PageHeader({
     </header>
   );
 }
+export function FieldError({ message }: { message?: string }) {
+  return message ? <small className="field-error">{message}</small> : null;
+}
 export function Feedback({
   message,
   error = false,

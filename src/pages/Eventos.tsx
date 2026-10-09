@@ -4,11 +4,14 @@ import {
   PageHeader,
   Feedback,
   ListState,
+  FieldError,
   dateLabel,
   money,
   searchText,
 } from "../components/AdminUI";
 import { useApiList, requestJson, errorMessage } from "../hooks/useApiList";
+import { useConfirm } from "../hooks/useConfirm";
+import { validarEvento, type Errores } from "../utils/validar";
 interface Stats {
   totalVentas: number;
   ingresosTotales: number;
@@ -39,7 +42,9 @@ export default function Eventos() {
   const [mensaje, setMensaje] = useState(""),
     [saveError, setSaveError] = useState(""),
     [saving, setSaving] = useState(false);
+  const [errores, setErrores] = useState<Errores>({});
   const busy = useRef(false);
+  const { confirmar, dialogo } = useConfirm();
   const [stats, setStats] = useState<Record<number, Stats>>({}),
     [expanded, setExpanded] = useState<number | null>(null),
     [statsLoading, setStatsLoading] = useState(false),
@@ -55,8 +60,13 @@ export default function Eventos() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draft || busy.current) return;
-    if (!draft.nombre.trim()) {
-      setSaveError("Ingresá el nombre del evento.");
+    const encontrados = validarEvento(
+      draft,
+      eventos.filter((e) => e.id !== draft.id).map((e) => e.nombre),
+    );
+    setErrores(encontrados);
+    if (Object.keys(encontrados).length) {
+      setSaveError("Revisá los campos marcados antes de guardar.");
       return;
     }
     busy.current = true;
@@ -93,6 +103,17 @@ export default function Eventos() {
     }
   };
   const toggle = async (evento: Evento) => {
+    if (busy.current) return;
+    if (
+      evento.activo &&
+      !(await confirmar({
+        titulo: `¿Desactivar “${evento.nombre}”?`,
+        texto:
+          "Deja de poder elegirse al vender. Sus ventas siguen en el historial y lo podés volver a activar.",
+        accion: "Desactivar evento",
+      }))
+    )
+      return;
     if (busy.current) return;
     busy.current = true;
     setSaving(true);
@@ -142,6 +163,7 @@ export default function Eventos() {
           disabled={saving}
           onClick={() => {
             setDraft({ nombre: "", fecha: "", descripcion: "" });
+            setErrores({});
             setSaveError("");
           }}
         >
@@ -151,7 +173,7 @@ export default function Eventos() {
       <Feedback message={mensaje} />
       <Feedback message={saveError} error />
       {draft && (
-        <form className="surface event-form" onSubmit={save}>
+        <form className="surface event-form" onSubmit={save} noValidate>
           <h2>{draft.id ? "Editar evento" : "Nuevo evento"}</h2>
           <p className="section-help">El nombre y la fecha son obligatorios.</p>
           <fieldset disabled={saving}>
@@ -166,7 +188,10 @@ export default function Eventos() {
                     setDraft({ ...draft, nombre: e.target.value })
                   }
                   placeholder="Por ejemplo, Encuentro IAM"
+                  maxLength={80}
+                  aria-invalid={!!errores.nombre}
                 />
+                <FieldError message={errores.nombre} />
               </label>
               <label>
                 Fecha
@@ -177,7 +202,9 @@ export default function Eventos() {
                   onChange={(e) =>
                     setDraft({ ...draft, fecha: e.target.value })
                   }
+                  aria-invalid={!!errores.fecha}
                 />
+                <FieldError message={errores.fecha} />
               </label>
             </div>
             <label>
@@ -185,10 +212,13 @@ export default function Eventos() {
               <textarea
                 rows={3}
                 value={draft.descripcion}
+                maxLength={500}
+                aria-invalid={!!errores.descripcion}
                 onChange={(e) =>
                   setDraft({ ...draft, descripcion: e.target.value })
                 }
               />
+              <FieldError message={errores.descripcion} />
             </label>
             <div className="record-actions">
               <button className="primary" type="submit">
@@ -271,6 +301,7 @@ export default function Eventos() {
                       fecha: evento.fecha.slice(0, 10),
                       descripcion: evento.descripcion || "",
                     });
+                    setErrores({});
                     setSaveError("");
                     window.scrollTo({ top: 0 });
                   }}
@@ -361,6 +392,7 @@ export default function Eventos() {
           ))}
         </div>
       )}
+      {dialogo}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 import { useState } from "react";
 const links = [
   { to: "/", label: "Nueva venta" },
+  { to: "/catalogo", label: "Catálogo" },
   { to: "/historial", label: "Historial" },
   { to: "/productos", label: "Agregar producto" },
   { to: "/editar-productos", label: "Editar productos" },

@@ -1,9 +1,9 @@
 [
   {
     "test": "real product load",
-    "count": 34,
+    "count": 39,
     "timing": [
-      1384
+      3160
     ]
   },
   {
@@ -31,7 +31,7 @@
     "pass": true
   },
   {
-    "test": "merged quantities / stock limit / change / transfer / debt",
+    "test": "merged quantities / quantity cap / change / transfer / debt",
     "pass": true
   },
   {

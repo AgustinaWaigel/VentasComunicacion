@@ -60,18 +60,22 @@ try {
       .focus();
     await page.keyboard.press("Enter");
     assert.equal(await page.locator(".order-items li").count(), 1);
-    if (width < 850) {
+    if (width < 900) {
+      await page.locator(".mobile-summary").click();
+      await page.waitForTimeout(300); // la hoja termina de subir
       const box = await page.locator("#evento").boundingBox();
       assert.ok(box.y < 450);
       await page
-        .getByLabel("Medio de pago móvil")
-        .selectOption("transferencia");
+        .getByRole("button", { name: "Transferencia", exact: true })
+        .click();
       assert.equal(
         await page
           .getByRole("button", { name: "Transferencia", exact: true })
           .getAttribute("aria-pressed"),
         "true",
       );
+      await page.getByRole("button", { name: "Seguir agregando" }).click();
+      await page.locator(".order-panel").waitFor({ state: "hidden" });
       if (width === 390)
         await page.screenshot({
           path: "docs/impeccable-mobile-sale.png",
@@ -85,7 +89,7 @@ try {
     }
     delay = 700;
     await page
-      .locator(width < 850 ? ".mobile-order button" : ".checkout")
+      .locator(width < 900 ? ".mobile-order .primary" : ".checkout")
       .click();
     await page
       .getByRole("status")
@@ -113,7 +117,7 @@ try {
     .getByRole("button", { name: "Agregar Llavero", exact: true })
     .click();
   fail = true;
-  await page.locator(".mobile-order button").click();
+  await page.locator(".mobile-order .primary").click();
   const alert = page.getByRole("alert");
   await alert.waitFor();
   const rect = await alert.boundingBox();
@@ -138,9 +142,8 @@ try {
         .slice(0, 3)
         .map(Number);
     return [
-      ".product-info h3",
+      ".product-name",
       ".product-price",
-      ".availability",
       ".product-category",
       ".search-box input",
     ].map((selector) => {

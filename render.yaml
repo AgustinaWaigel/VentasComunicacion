@@ -27,4 +27,4 @@ services:
       - key: NODE_ENV
         value: production
       - key: VITE_API_URL
-        value: https://ventasiam-api.onrender.com
+        value: https://ventascomunicacion.onrender.com

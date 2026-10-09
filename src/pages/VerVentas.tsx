@@ -3,11 +3,15 @@ import {
   PageHeader,
   Feedback,
   ListState,
+  FieldError,
   money,
   dateLabel,
   searchText,
 } from "../components/AdminUI";
 import { useApiList, requestJson, errorMessage } from "../hooks/useApiList";
+import { useConfirm } from "../hooks/useConfirm";
+import { validarImporte } from "../utils/validar";
+import { exportarVentas } from "../utils/exportarVentas";
 interface DetalleVenta {
   id: number;
   venta_id: number;
@@ -66,7 +70,9 @@ export default function VerVentas() {
     [exporting, setExporting] = useState(false);
   const [mensaje, setMensaje] = useState(""),
     [actionError, setActionError] = useState("");
+  const [errorEfectivo, setErrorEfectivo] = useState("");
   const busy = useRef(false);
+  const { confirmar, dialogo } = useConfirm();
   const ventasFiltradas = ventas.filter(
     (v) =>
       (!filtroNombre ||
@@ -102,12 +108,18 @@ export default function VerVentas() {
   const toggle = (id: number) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (!next.delete(id)) next.add(id);
       return next;
     });
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draft || busy.current) return;
+    const problema =
+      draft.metodoPago === "transferencia"
+        ? ""
+        : validarImporte(draft.efectivo ?? 0);
+    setErrorEfectivo(problema);
+    if (problema) return;
     busy.current = true;
     setSaving(true);
     setActionError("");
@@ -150,9 +162,17 @@ export default function VerVentas() {
     if (
       busy.current ||
       !ids.length ||
-      !confirm(
-        `¿Eliminar ${ids.length === 1 ? "esta venta" : `${ids.length} ventas`}? Se devolverán las unidades al stock.`,
-      )
+      !(await confirmar({
+        titulo:
+          ids.length === 1
+            ? `¿Eliminar la venta #${ids[0]}?`
+            : `¿Eliminar ${ids.length} ventas?`,
+        texto:
+          "Se borran del historial y dejan de contar en los totales. No se puede deshacer.",
+        accion: ids.length === 1 ? "Eliminar venta" : `Eliminar ${ids.length} ventas`,
+        peligro: true,
+      })) ||
+      busy.current
     )
       return;
     busy.current = true;
@@ -181,192 +201,13 @@ export default function VerVentas() {
       setSaving(false);
     }
   };
-  const exportarExcelEvento = async (
-    nombreEvento: string,
-    ventasDelEvento: Venta[],
-  ) => {
-    if (ventasDelEvento.length === 0) return;
-
-    const XLSX = await import("xlsx");
-    const filas: Record<string, string | number>[] = [];
-
-    // Fila de cabecera del informe
-    filas.push({
-      "N° Venta": "N° Venta",
-      Fecha: "Fecha",
-      Hora: "Hora",
-      Producto: "Producto",
-      Cantidad: "Cantidad",
-      "Precio unitario ($)": "Precio unitario ($)",
-      "Subtotal ($)": "Subtotal ($)",
-      "Forma de pago": "Forma de pago",
-      "Estado deuda": "Estado deuda",
-    });
-
-    let totalGeneral = 0;
-    let totalEfectivo = 0;
-    let totalTransferencia = 0;
-
-    // Objeto para agrupar costos por producto
-    const costosPorProducto: {
-      [key: string]: { nombre: string; cantidad: number; costo: number };
-    } = {};
-
-    ventasDelEvento.forEach((venta) => {
-      const fecha = new Date(venta.fecha);
-      const fechaStr = fecha.toLocaleDateString("es-AR");
-      const horaStr = fecha.toLocaleTimeString("es-AR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      const formaPago =
-        venta.metodoPago === "transferencia" ? "Transferencia" : "Efectivo";
-      const deuda = venta.debe ? "Debe" : "Al dia";
-
-      venta.detalles.forEach((d) => {
-        const precioUnitario = d.cantidad > 0 ? d.subtotal / d.cantidad : 0;
-
-        filas.push({
-          "N° Venta": venta.id,
-          Fecha: fechaStr,
-          Hora: horaStr,
-          Producto: d.nombre,
-          Cantidad: d.cantidad,
-          "Precio unitario ($)": precioUnitario.toFixed(2),
-          "Subtotal ($)": d.subtotal.toFixed(2),
-          "Forma de pago": formaPago,
-          "Estado deuda": deuda,
-        });
-
-        // Agrupar costos por producto (costo unitario × cantidad)
-        if (!costosPorProducto[d.producto_id]) {
-          costosPorProducto[d.producto_id] = {
-            nombre: d.nombre,
-            cantidad: 0,
-            costo: 0,
-          };
-        }
-        costosPorProducto[d.producto_id].cantidad += d.cantidad;
-        costosPorProducto[d.producto_id].costo += d.costo * d.cantidad;
-      });
-
-      totalGeneral += venta.total;
-      if (venta.metodoPago === "transferencia") {
-        totalTransferencia += venta.total;
-      } else {
-        totalEfectivo += venta.total;
-      }
-    });
-
-    // Fila vacía de separador
-    filas.push({});
-
-    // Totales resumen
-    filas.push({
-      "N° Venta": "",
-      Fecha: "",
-      Hora: "",
-      Producto: "TOTAL GENERAL",
-      Cantidad: "",
-      "Precio unitario ($)": "",
-      "Subtotal ($)": totalGeneral.toFixed(2),
-      "Forma de pago": "",
-      "Estado deuda": "",
-    });
-    filas.push({
-      "N° Venta": "",
-      Fecha: "",
-      Hora: "",
-      Producto: "Total Efectivo",
-      Cantidad: "",
-      "Precio unitario ($)": "",
-      "Subtotal ($)": totalEfectivo.toFixed(2),
-      "Forma de pago": "Efectivo",
-      "Estado deuda": "",
-    });
-    filas.push({
-      "N° Venta": "",
-      Fecha: "",
-      Hora: "",
-      Producto: "Total Transferencia",
-      Cantidad: "",
-      "Precio unitario ($)": "",
-      "Subtotal ($)": totalTransferencia.toFixed(2),
-      "Forma de pago": "Transferencia",
-      "Estado deuda": "",
-    });
-
-    // Fila vacía de separador
-    filas.push({});
-
-    // Resumen de costos por producto
-    filas.push({
-      "N° Venta": "",
-      Fecha: "",
-      Hora: "",
-      Producto: "RESUMEN DE COSTOS POR PRODUCTO",
-      Cantidad: "",
-      "Precio unitario ($)": "",
-      "Subtotal ($)": "",
-      "Forma de pago": "",
-      "Estado deuda": "",
-    });
-
-    filas.push({
-      "N° Venta": "",
-      Fecha: "",
-      Hora: "",
-      Producto: "Producto",
-      Cantidad: "Cantidad",
-      "Precio unitario ($)": "Costo Total",
-      "Subtotal ($)": "",
-      "Forma de pago": "",
-      "Estado deuda": "",
-    });
-
-    // Agregar cada producto al resumen
-    Object.values(costosPorProducto).forEach((prod) => {
-      filas.push({
-        "N° Venta": "",
-        Fecha: "",
-        Hora: "",
-        Producto: prod.nombre,
-        Cantidad: prod.cantidad,
-        "Precio unitario ($)": prod.costo.toFixed(2),
-        "Subtotal ($)": "",
-        "Forma de pago": "",
-        "Estado deuda": "",
-      });
-    });
-
-    // Crear libro
-    const ws = XLSX.utils.json_to_sheet(filas, { skipHeader: true });
-    ws["!cols"] = [
-      { wch: 10 }, // N° Venta
-      { wch: 12 }, // Fecha
-      { wch: 8 }, // Hora
-      { wch: 28 }, // Producto
-      { wch: 10 }, // Cantidad
-      { wch: 20 }, // Precio unitario
-      { wch: 14 }, // Subtotal
-      { wch: 16 }, // Forma de pago
-      { wch: 14 }, // Estado deuda
-    ];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Ventas");
-
-    const nombreArchivo = `ventas_${nombreEvento.replace(/\s+/g, "_").toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(wb, nombreArchivo);
-  };
-
   const download = async (name: string, items: Venta[]) => {
     if (exporting) return;
     setExporting(true);
     setActionError("");
     try {
-      await exportarExcelEvento(name, items);
-    } catch (e) {
+      await exportarVentas(name, items);
+    } catch {
       setActionError("No se pudo descargar el Excel. Volvé a intentar.");
     } finally {
       setExporting(false);
@@ -381,7 +222,15 @@ export default function VerVentas() {
         <button
           className="primary"
           disabled={exporting || loading || !!error || !ventasFiltradas.length}
-          onClick={() => void download("ventas_filtradas", ventasFiltradas)}
+          onClick={() =>
+            void download(
+              filtroEvento === "general"
+                ? "Ventas generales"
+                : eventosApi.data.find((e) => String(e.id) === filtroEvento)
+                    ?.nombre || "Todos los eventos",
+              ventasFiltradas,
+            )
+          }
         >
           {exporting ? "Preparando Excel…" : "Exportar Excel"}
         </button>
@@ -530,72 +379,103 @@ export default function VerVentas() {
               </button>
             )}
           </div>
-          <div className="record-list">
-            {ventasFiltradas.map((v) => (
-              <article
-                className="surface sale-record"
-                key={v.id}
-                aria-label={`Venta ${v.id}`}
-              >
-                <div className="record-heading">
-                  <label className="sale-select">
-                    <input
-                      aria-label={`Seleccionar venta ${v.id}`}
-                      type="checkbox"
-                      checked={selected.has(v.id)}
-                      disabled={saving}
-                      onChange={() => toggle(v.id)}
-                    />
-                    <span>Venta #{v.id}</span>
-                  </label>
-                  <div className="record-title">
-                    <p>
-                      {dateLabel(v.fecha)} ·{" "}
-                      {new Date(v.fecha).toLocaleTimeString("es-AR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                    <h2>{v.evento_nombre || "Venta general"}</h2>
-                  </div>
-                  <span className={`state-tag ${v.debe ? "pending" : ""}`}>
-                    {v.debe ? "Pago pendiente" : "Al día"}
-                  </span>
-                </div>
-                <div className="sale-line-items">
-                  {v.detalles.map((d) => (
-                    <div key={d.id}>
-                      <span>
-                        {d.nombre}
-                        <small>
-                          {d.cantidad} ×{" "}
-                          {money(d.cantidad ? d.subtotal / d.cantidad : 0)}
-                        </small>
-                      </span>
-                      <strong>{money(d.subtotal)}</strong>
-                    </div>
-                  ))}
-                </div>
-                <dl className="record-facts">
-                  <div>
-                    <dt>Total</dt>
-                    <dd>{money(v.total)}</dd>
-                  </div>
-                  <div>
-                    <dt>Ganancia</dt>
-                    <dd>{money(v.ganancia)}</dd>
-                  </div>
-                  <div>
-                    <dt>Medio de pago</dt>
-                    <dd>
+          <div className="surface table-surface">
+            <table className="inventory-table sales-table">
+              <thead>
+                <tr>
+                  <th className="col-check">
+                    <span className="sr-only">Seleccionar</span>
+                  </th>
+                  <th>Venta</th>
+                  <th>Productos</th>
+                  <th className="col-category">Evento</th>
+                  <th>Cobro</th>
+                  <th className="col-number col-profit">Ganancia</th>
+                  <th className="col-number">Total</th>
+                  <th className="col-actions">
+                    <span className="sr-only">Acciones</span>
+                  </th>
+                </tr>
+              </thead>
+              {ventasFiltradas.map((v) => (
+                <tbody
+                  key={v.id}
+                  className={`inventory-record sale-record ${draft?.id === v.id ? "is-editing" : ""} ${selected.has(v.id) ? "is-selected" : ""}`}
+                >
+                  <tr>
+                    <td className="col-check">
+                      <input
+                        aria-label={`Seleccionar venta ${v.id}`}
+                        type="checkbox"
+                        checked={selected.has(v.id)}
+                        disabled={saving}
+                        onChange={() => toggle(v.id)}
+                      />
+                    </td>
+                    <th scope="row" className="sale-id">
+                      #{v.id}
+                      <small>
+                        {dateLabel(v.fecha)} ·{" "}
+                        {new Date(v.fecha).toLocaleTimeString("es-AR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </small>
+                    </th>
+                    <td className="sale-items">
+                      <ul>
+                        {v.detalles.map((d) => (
+                          <li key={d.id}>
+                            <b>{d.cantidad} ×</b> {d.nombre}
+                          </li>
+                        ))}
+                      </ul>
+                    </td>
+                    <td className="col-category">
+                      {v.evento_nombre || "Venta general"}
+                    </td>
+                    <td className="sale-pay">
                       {v.metodoPago === "transferencia"
                         ? "Transferencia"
                         : "Efectivo"}
-                    </dd>
-                  </div>
-                </dl>
-                {draft?.id === v.id ? (
-                  <form onSubmit={save}>
+                      {v.debe && (
+                        <span className="state-tag pending">Pago pendiente</span>
+                      )}
+                    </td>
+                    <td className="col-number col-profit">
+                      {money(v.ganancia)}
+                    </td>
+                    <td className="col-number inventory-price">
+                      {money(v.total)}
+                    </td>
+                    <td className="col-actions">
+                      <button
+                        className="secondary"
+                        aria-label={`Editar cobro de la venta ${v.id}`}
+                        disabled={saving || draft !== null}
+                        onClick={() => {
+                          setDraft({ ...v });
+                          setErrorEfectivo("");
+                          setActionError("");
+                          setMensaje("");
+                        }}
+                      >
+                        Editar cobro
+                      </button>
+                      <button
+                        className="danger-button"
+                        aria-label={`Eliminar venta ${v.id}`}
+                        disabled={saving || draft !== null}
+                        onClick={() => void remove([v.id])}
+                      >
+                        Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                  {draft?.id === v.id && (
+                    <tr className="inventory-edit">
+                      <td colSpan={8}>
+                  <form onSubmit={save} noValidate>
                     <fieldset disabled={saving} className="inline-edit">
                       <div className="form-grid">
                         <label>
@@ -617,6 +497,7 @@ export default function VerVentas() {
                             type="number"
                             min="0"
                             step="0.01"
+                            aria-invalid={!!errorEfectivo}
                             value={draft.efectivo || 0}
                             onChange={(e) =>
                               setDraft({
@@ -625,6 +506,7 @@ export default function VerVentas() {
                               })
                             }
                           />
+                          <FieldError message={errorEfectivo} />
                         </label>
                       </div>
                       <label className="check-label">
@@ -651,33 +533,16 @@ export default function VerVentas() {
                       </div>
                     </fieldset>
                   </form>
-                ) : (
-                  <div className="record-actions">
-                    <button
-                      className="secondary"
-                      disabled={saving || draft !== null}
-                      onClick={() => {
-                        setDraft({ ...v });
-                        setActionError("");
-                        setMensaje("");
-                      }}
-                    >
-                      Editar cobro
-                    </button>
-                    <button
-                      className="danger-button"
-                      disabled={saving || draft !== null}
-                      onClick={() => void remove([v.id])}
-                    >
-                      Eliminar venta
-                    </button>
-                  </div>
-                )}
-              </article>
-            ))}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              ))}
+            </table>
           </div>
         </>
       )}
+      {dialogo}
     </div>
   );
 }
